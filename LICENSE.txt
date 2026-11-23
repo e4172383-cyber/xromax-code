@@ -1,0 +1,40 @@
+XroMax Code — Proprietary Software License
+XroMax Code — Проприетарная лицензия
+
+Copyright © 2026 XROMAX AI. Все права защищены. All rights reserved.
+
+РУССКИЙ
+
+Это приложение (XroMax Code), его исходный код, интерфейс, оформление,
+встроенные скиллы, тексты и логика являются собственностью XROMAX AI.
+
+ЗАПРЕЩЕНО без письменного разрешения XROMAX AI:
+  1. Копировать, воспроизводить или распространять приложение или его части.
+  2. Изменять, переписывать, адаптировать или создавать производные работы,
+     а также переносить его внешний вид, структуру или логику в другие продукты.
+  3. Декомпилировать, дизассемблировать, извлекать исходный код, обходить
+     техническую защиту (в том числе отключение инструментов разработчика).
+  4. Удалять или скрывать уведомления об авторских правах.
+  5. Выдавать приложение или его части за свои, продавать или сдавать в аренду.
+
+Разрешается только личное использование официально установленной копии
+приложения, полученной из официального источника XROMAX AI.
+
+ENGLISH
+
+This application (XroMax Code), its source code, user interface, design,
+built-in skills, texts and logic are the property of XROMAX AI.
+
+Without prior written permission from XROMAX AI, you may NOT:
+  1. Copy, reproduce or distribute the application or any part of it.
+  2. Modify, rewrite, adapt or create derivative works, or reproduce its
+     look, structure or logic in other products.
+  3. Decompile, disassemble, extract the source code, or bypass technical
+     protection (including disabling developer tools).
+  4. Remove or obscure copyright notices.
+  5. Pass the application or its parts off as your own, sell or rent it.
+
+Only personal use of an officially installed copy obtained from the
+official XROMAX AI source is permitted.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.

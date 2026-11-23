@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'none'" />
+    <title>XroMax Code</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="extras.css" />
+    <link rel="stylesheet" href="settings.css" />
+  </head>
+  <body>
+    <div id="titlebar">
+      <button class="icon-btn" id="side-toggle" title="Все сессии"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16" /></svg></button>
+      <button class="icon-btn" id="settings-btn" title="Поставщики и ключи"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0" /><circle cx="16" cy="6" r="2" /><circle cx="10" cy="12" r="2" /><circle cx="18" cy="18" r="2" /></svg></button>
+      <div id="tabs"></div>
+      <button class="icon-btn" id="new-tab" title="Новая сессия (Ctrl+T)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14" /></svg></button>
+      <button class="icon-btn" id="plugins-btn" title="Плагины, скиллы и коннекторы"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6v4a2 2 0 1 0 4 0h2v6h-4a2 2 0 1 0 0 4h4v4H3v-6h2a2 2 0 1 0 0-4H3V3h2a2 2 0 1 0 4 0z" /></svg></button>
+      <button class="icon-btn" id="bug-btn" title="Сообщить о баге"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2l1.9 1.9M16 2l-1.9 1.9M9 7.1V6a3 3 0 0 1 6 0v1.1"/><path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6z"/><path d="M12 20v-9M6.5 13H3M21 13h-3.5M6 17l-3 1M18 17l3 1M6 9 3.5 7.5M18 9l2.5-1.5"/></svg></button>
+      <div class="spacer"></div>
+      <div id="update-slot"></div>
+      <button id="limits-btn" class="hidden" title="Лимиты тарифа"><span class="lim"><i>5ч</i><b id="lim5"></b></span><span class="lim"><i>нед</i><b id="limW"></b></span></button>
+      <div class="meter-wrap">
+        <button id="compress-btn" class="hidden" title="Сжать разговор, чтобы освободить контекст">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7" /></svg>
+          Сжать
+        </button>
+        <button id="ctx-btn" title="Заполненность контекста">
+          <svg id="ctx-ring" width="18" height="18" viewBox="0 0 20 20">
+            <circle cx="10" cy="10" r="8" fill="none" stroke="#e8e8e8" stroke-width="3" />
+            <circle id="ctx-arc" cx="10" cy="10" r="8" fill="none" stroke="#2f6bff" stroke-width="3" stroke-linecap="round" stroke-dasharray="50.27" stroke-dashoffset="50.27" transform="rotate(-90 10 10)" />
+          </svg>
+          <span class="pct">0%</span>
+        </button>
+        <span id="spend" title="Потрачено на API">$0.00</span>
+      </div>
+    </div>
+
+    <div id="app">
+      <aside id="sidebar" class="hidden"></aside>
+      <section id="main" class="empty">
+        <!-- фон-ролик, пока включён UltraCode -->
+        <video id="ultra-bg" src="media/ultra-bg.mp4" muted loop playsinline preload="none" aria-hidden="true"></video>
+        <div id="hero">
+          <div id="logo"></div>
+          <div class="composer-wrap" id="hero-slot"></div>
+        </div>
+        <div id="scroll"><div id="transcript"></div></div>
+        <div id="dock"><div class="composer-wrap" id="dock-slot"></div></div>
+      </section>
+    </div>
+
+    <!-- вход через сайт: пока не вошли, приложение закрыто этим экраном -->
+    <div id="signin" class="hidden"></div>
+
+    <!-- поле ввода (переносится между центром и низом) -->
+    <template id="composer-tpl">
+      <div id="approval-slot"></div>
+      <div id="slash-menu" class="hidden"></div>
+      <div id="ultra-warn" class="hidden">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" /></svg>
+        <span><b>UltraCode включён:</b> до 11 агентов параллельно, критики и тесты — расход токенов в разы выше.</span>
+      </div>
+      <div id="retry-bar" class="hidden">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" /></svg>
+        <span>Не получилось получить ответ — связь или сервер модели подвели.</span>
+        <button class="retry-go" data-retry><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5" /></svg>Попробовать снова</button>
+        <button class="retry-x" data-dismiss title="Скрыть">×</button>
+      </div>
+      <div class="composer" id="composer">
+        <div id="attachments"></div>
+        <textarea id="input" rows="1" placeholder="Спросите что угодно, Shift+Enter — новая строка…"></textarea>
+        <div class="composer-row">
+          <button class="icon-btn" id="attach-btn" title="Прикрепить фото или файлы (можно вставить Ctrl+V или перетащить)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14" /></svg></button>
+          <input type="file" id="file-input" multiple hidden />
+          <button class="chip" id="model-chip" title="Модель"><span class="lbl">Модель</span><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m6 9 6 6 6-6" /></svg></button>
+          <button class="chip" id="think-chip" title="Глубина мышления"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z" /></svg><span class="lbl">Default</span><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m6 9 6 6 6-6" /></svg></button>
+          <button class="chip" id="access-chip" title="Доступ"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z" /></svg><span class="lbl">Авто</span><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m6 9 6 6 6-6" /></svg></button>
+          <button class="chip" id="ultra-chip" title="UltraCode — усиление от XroMax: субагенты, критики, тесты"><svg class="spark" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8z" /></svg>UltraCode</button>
+          <button id="send" disabled title="Отправить (Enter)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7" /></svg></button>
+        </div>
+      </div>
+      <div class="project-row">
+        <button class="chip" id="project-chip" title="Папка проекта"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg><span class="lbl">Default Project</span><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m6 9 6 6 6-6" /></svg></button>
+        <span class="path" id="project-path"></span>
+      </div>
+    </template>
+
+    <script src="i18n.js"></script>
+    <script src="markdown.js"></script>
+    <script src="app.js"></script>
+    <script src="extras.js"></script>
+    <script src="settings.js"></script>
+  </body>
+</html>

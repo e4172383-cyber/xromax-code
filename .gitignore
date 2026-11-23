@@ -1,0 +1,5 @@
+node_modules/
+dist/
+signing/update-private.pem
+*.pem
+!signing/update-public.pem

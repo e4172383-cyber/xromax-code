@@ -1,0 +1,82 @@
+{
+  "name": "xromax-code",
+  "productName": "XroMax Code",
+  "version": "1.0.34",
+  "description": "XroMax Code — AI coding agent for Windows with any API",
+  "author": "XROMAX",
+  "private": true,
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "node test/tools.test.js && node test/agent.test.js",
+    "pack": "electron-builder --win dir",
+    "dist": "electron-builder --win nsis && node scripts/sign-update.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.4.0",
+    "electron-updater": "^6.8.11"
+  },
+  "devDependencies": {
+    "electron": "44.10.2",
+    "electron-builder": "^26.18.0"
+  },
+  "build": {
+    "appId": "com.xromax.code",
+    "productName": "XroMax Code",
+    "copyright": "XROMAX",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "core/**",
+      "renderer/**",
+      "i18n/**",
+      "build/icon.png",
+      "signing/update-public.pem",
+      "package.json",
+      "skills/**",
+      "LICENSE.txt"
+    ],
+    "asar": true,
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png",
+      "signAndEditExecutable": true,
+      "verifyUpdateCodeSignature": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "XroMax Code",
+      "artifactName": "XroMax-Code-Setup-${version}.exe",
+      "license": "LICENSE.txt"
+    },
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://xromax-ai.defhosting.com/downloads/code/"
+      }
+    ],
+    "releaseInfo": {
+      "releaseName": "1.0.4.30"
+    },
+    "asarUnpack": [
+      "core/diag-ts.js"
+    ]
+  },
+  "displayVersion": "1.0.4.30",
+  "license": "UNLICENSED"
+}
