@@ -7,7 +7,7 @@ let signinState = null;
 function showSignin(note) {
   const box = signinBox();
   box.classList.remove("hidden");
-  box.innerHTML = `<div class="si-box"><div id="si-logo"></div><h2>Войдите в XroMax Code</h2><p>Вход — через сайт XroMax. Бесплатные встроенные модели, копии чатов в аккаунте и ваш тариф появятся сразу после входа.</p>
+  box.innerHTML = `<div class="si-box"><div id="si-logo"></div><h2>Войдите в XroMax Code</h2><p>Вход — через сайт XroMax. Бесплатные встроенные модели и копии чатов в аккаунте появятся сразу после входа.</p>
     ${note ? `<div class="err" style="margin-bottom:14px">${esc(note)}</div>` : ""}
     <div class="si-btns"><button class="si-btn primary" id="si-start">Войти через сайт</button></div>
     <div class="si-small">Сайт: <a data-site>xromax-ai.defhosting.com</a></div></div>`;
@@ -52,7 +52,7 @@ function currentLimits() {
   // выбрана модель ChatGPT (подписка) — показываем лимиты подписки, а не XroMax
   if (cur()?.modelRef?.provider === "chatgpt") return app.gptLimits ? { L: app.gptLimits, title: "Лимиты подписки ChatGPT" } : null;
   const anyPlan = app.catalog?.some((g) => g.models?.some((m) => m.plan));
-  if (anyPlan && app.account?.limits) return { L: app.account.limits, title: "Лимиты тарифа " + (app.account.plan?.name || "") };
+  if (anyPlan && app.account?.limits) return { L: app.account.limits, title: "Лимиты XroMax" };
   const T = app.account?.tests ? Object.values(app.account.tests)[0] : null;
   if (T && typeof T.pct5h === "number") return { L: T, title: "Лимиты XroMax 2.5" };
   return null;
@@ -83,9 +83,9 @@ function modelEstimateHtml() {
   if (!model) return "";
   const est = estimateFor(ref.provider, ref.model);
   const head = `<div class="est-t">Выбрана: <b>${esc(model.name)}</b></div>`;
-  if (ref.provider !== "xromax-free") return `<div class="est">${head}<small>Свой API — лимиты тарифа не тратятся, расход у вашего поставщика</small></div>`;
+  if (ref.provider !== "xromax-free") return `<div class="est">${head}<small>Свой API — лимиты XroMax не тратятся, расход у вашего поставщика</small></div>`;
   if (!est && app.account?.tests?.[ref.model]) return `<div class="est">${head}<small>Эта модель использует лимиты XroMax 2.5: 5 часов и неделя (общие для Helium и Xenon)</small></div>`;
-  if (!est) return `<div class="est">${head}<small>Эта модель не тратит лимиты тарифа</small></div>`;
+  if (!est) return `<div class="est">${head}<small>Эта модель без лимитов</small></div>`;
   const cell = (n, label) => `<div class="c ${n === 0 ? "zero" : ""}"><b>≈ ${fmtReq(n)}</b><span>запросов ${label}</span></div>`;
   return `<div class="est">${head}<div class="cells">${cell(est.left5h, "до конца 5 часов")}${cell(est.leftWeek, "до конца недели")}</div><small>Один запрос ≈ ${est.pctPer}% 5-часового лимита · ${BASIS[est.basis] || ""}</small></div>`;
 }
@@ -546,7 +546,7 @@ async function renderSidebar() {
   const list = await window.xc.sessions.list();
   const a = app.account?.user;
   sb.innerHTML = a
-    ? `<div class="acc">${a.picture ? `<img src="${esc(a.picture)}" alt="">` : `<span class="av">${esc((a.name || "?")[0])}</span>`}<div class="who">${esc(a.name)}<small>${esc(app.account.plan?.name ? "Тариф " + app.account.plan.name : a.email || "")}</small></div><button class="icon-btn" data-logout title="Выйти">⎋</button></div>`
+    ? `<div class="acc">${a.picture ? `<img src="${esc(a.picture)}" alt="">` : `<span class="av">${esc((a.name || "?")[0])}</span>`}<div class="who">${esc(a.name)}<small>${esc(a.email || "")}</small></div><button class="icon-btn" data-logout title="Выйти">⎋</button></div>`
     : "";
   if (document.documentElement.classList.contains("layout-side")) {
     sb.insertAdjacentHTML("beforeend", `<button class="side-new" data-new>+ Новая сессия</button>`);

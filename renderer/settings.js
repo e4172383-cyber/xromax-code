@@ -121,7 +121,7 @@ const SECTIONS = [
   { id: "keys", label: "Горячие клавиши", ico: "⌘" },
   { id: "privacy", label: "Конфиденциальность", ico: "⛨" },
   { gap: true },
-  { id: "limits", label: "Лимиты и подписка", ico: "◷" },
+  { id: "limits", label: "Лимиты", ico: "◷" },
   { id: "providers", label: "Провайдеры", ico: "⛁" },
   { id: "models", label: "Модели", ico: "✦" },
   { id: "agents", label: "Субагенты", ico: "☻" },
@@ -229,7 +229,7 @@ async function drawSection() {
       `<button class="st-row st-more" data-pv-info="protect"><div class="t"><b>Как мы защищаем ваши данные</b></div><span class="chev">›</span></button>` +
       `<div class="st-info hidden" data-pv-box="protect">Чаты лежат в папке приложения на вашем ПК. Ключи API хранятся зашифрованными средствами Windows и никуда не отправляются, кроме самого поставщика. Связь с сайтом — только по HTTPS, вход — по токену приложения, который можно отозвать выходом из аккаунта. Копии чатов в аккаунте доступны только вам.</div>` +
       `<button class="st-row st-more" data-pv-info="use"><div class="t"><b>Как мы используем ваши данные</b></div><span class="chev">›</span></button>` +
-      `<div class="st-info hidden" data-pv-box="use">Запросы к встроенным моделям XroMax передаются модели, чтобы получить ответ, и считаются в лимиты тарифа. Запросы к вашим API (свои ключи) идут напрямую поставщику, минуя XroMax. Для улучшения моделей чаты используются только с вашего согласия — переключатель ниже.</div>` +
+      `<div class="st-info hidden" data-pv-box="use">Запросы к встроенным моделям XroMax передаются модели, чтобы получить ответ, и считаются в общие лимиты XroMax. Запросы к вашим API (свои ключи) идут напрямую поставщику, минуя XroMax. Для улучшения моделей чаты используются только с вашего согласия — переключатель ниже.</div>` +
       `</div><h3>Предпочтения</h3><div class="st-card">` +
       row("Метаданные о местоположении", "Сообщать агенту часовой пояс, регион Windows и местное время, чтобы ответы учитывали ваш регион. Точное местоположение не передаётся", tog("shareRegion", p.shareRegion !== false)) +
       row("Помогать улучшать модели XroMax", d.signedIn ? "Разрешить использовать ваши чаты и сессии программирования для обучения и улучшения моделей XroMax. Выбор сохраняется в аккаунте" : "Разрешить использовать ваши чаты для улучшения моделей XroMax. Войдите в аккаунт, чтобы выбор сохранился", tog("pv:improve", !!d.improve)) +
@@ -302,8 +302,8 @@ async function drawSection() {
     const bar = (title, p, reset) => `<div class="st-row" style="display:block"><div style="display:flex;justify-content:space-between;margin-bottom:6px"><b>${title}</b><span class="st-sub">${Math.round(p)}% использовано · ${esc(fmtReset(reset))}</span></div><div class="lim-line"><i style="width:${Math.min(100, p)}%;background:${p >= 90 ? "#ef4444" : p >= 75 ? "#f59e0b" : "#8b5cf6"}"></i></div></div>`;
     const resetBtn = (w, n, label) => `<div class="st-row"><div class="t"><b>${label}</b><span>${n > 0 ? `Доступно: ${n}. Сразу освобождает лимит.` : "Уже использован"}</span></div><button class="btn ${n > 0 ? "primary" : ""}" data-reset="${w}" ${n > 0 ? "" : "disabled"}>Сбросить</button></div>`;
     html =
-      head("Лимиты и подписка", "Ваш тариф, расход общих лимитов XroMax и подписка ChatGPT") +
-      (acc ? `<h3>Аккаунт XroMax</h3><div class="st-card">${row(esc(acc.user?.name || "Аккаунт"), "Тариф: " + esc(acc.plan?.name || "Бесплатный"), "")}</div>` : `<div class="st-card">${row("Вы не вошли", "Войдите через сайт, чтобы видеть лимиты", "")}</div>`) +
+      head("Лимиты", "Расход общих лимитов XroMax и лимиты подписки ChatGPT") +
+      (acc ? `<h3>Аккаунт XroMax</h3><div class="st-card">${row(esc(acc.user?.name || "Аккаунт"), "XroMax Code бесплатный — без подписок и оплаты", "")}</div>` : `<div class="st-card">${row("Вы не вошли", "Войдите через сайт, чтобы видеть лимиты", "")}</div>`) +
       (T ? `<h3>Общий лимит XroMax</h3><p class="st-sub">Helium, Xenon и Claude 5.5 тратят один счётчик. Модели 2.0 (Truo, Lite) — без лимитов.</p><div class="st-card">${bar("5 часов", T.pct5h, T.reset5h)}${bar("Неделя", T.pctWeek, T.resetWeek)}</div>` +
         `<h3>Сбросы лимитов</h3><p class="st-sub">Каждому — по одному сбросу. Сброс недели обнуляет и 5-часовой лимит.</p><div class="st-card">${resetBtn("5h", R.h5, "Сброс 5-часового лимита")}${resetBtn("week", R.week, "Сброс недельного лимита")}</div>` : "") +
       `<h3>Подписка ChatGPT</h3><div class="st-card" data-gptlim>${row("ChatGPT", "Проверяю…", "")}</div>`;
@@ -360,7 +360,7 @@ async function drawSection() {
     html = `<div class="st-about"><p>Версия ${esc(st.version)}</p><div style="margin:18px 0 22px">${$("#logo").innerHTML}</div>
       <p><b style="color:var(--text)">XroMax Code</b> — ИИ-агент для кода на Windows от XROMAX.</p>
       <p>Любые API: свои ключи, OpenRouter, Anthropic, OpenAI, DeepSeek и другие.<br>Встроенные бесплатные модели, UltraCode, плагины, скиллы и коннекторы.</p>
-      ${acc ? `<p>Вы вошли как ${esc(acc.name)}${app.account.plan?.name ? " · тариф " + esc(app.account.plan.name) : ""}</p>` : ""}
+      ${acc ? `<p>Вы вошли как ${esc(acc.name)}</p>` : ""}
       <p><button class="btn" data-check-update>Проверить обновления</button></p>
       <p><a class="st-link" data-url="https://xromax-ai.defhosting.com">xromax-ai.defhosting.com</a> · <a class="st-link" data-url="https://xromax-ai.defhosting.com/developers">XroMax API</a></p>
       <p style="color:var(--text-3)">© XROMAX</p></div>`;

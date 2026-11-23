@@ -468,7 +468,7 @@ async function openModelPicker() {
     const isNewModel = m.created && Date.now() - m.created < 21 * 86400000;
     const soon = m.status === "soon";
     if (soon) b.classList.add("soon");
-    b.innerHTML = `<span class="ck">${sel ? "✓" : ""}</span><span class="nm">${esc(m.name)}</span>${provName ? `<span class="pv">${esc(provName)}</span>` : ""}${soon ? '<span class="badge soon">Скоро</span>' : m.plan ? '<span class="badge plan">По тарифу</span>' : m.free ? '<span class="badge">Бесплатно</span>' : ""}${m.badge ? `<span class="badge new">${esc(m.badge)}</span>` : isNewModel ? '<span class="badge new">Новое</span>' : ""}${testNote(p.id, m.id) || (m.plan && estimateFor(p.id, m.id) ? `<span class="m-note">≈ ${fmtReq(estimateFor(p.id, m.id).left5h)} запросов на 5 ч</span>` : m.note ? `<span class="m-note">${esc(m.note)}</span>` : "")}<span class="ctx">${m.context ? fmtTok(m.context) : ""}</span>${soon ? "" : `<span class="def ${isDef(p.id, m.id) ? "is" : ""}" data-def>${isDef(p.id, m.id) ? "По умолчанию" : "Сделать по умолчанию"} ›</span>`}`;
+    b.innerHTML = `<span class="ck">${sel ? "✓" : ""}</span><span class="nm">${esc(m.name)}</span>${provName ? `<span class="pv">${esc(provName)}</span>` : ""}${soon ? '<span class="badge soon">Скоро</span>' : m.plan ? '<span class="badge plan">С лимитом</span>' : m.free ? '<span class="badge">Бесплатно</span>' : ""}${m.badge ? `<span class="badge new">${esc(m.badge)}</span>` : isNewModel ? '<span class="badge new">Новое</span>' : ""}${testNote(p.id, m.id) || (m.plan && estimateFor(p.id, m.id) ? `<span class="m-note">≈ ${fmtReq(estimateFor(p.id, m.id).left5h)} запросов на 5 ч</span>` : m.note ? `<span class="m-note">${esc(m.note)}</span>` : "")}<span class="ctx">${m.context ? fmtTok(m.context) : ""}</span>${soon ? "" : `<span class="def ${isDef(p.id, m.id) ? "is" : ""}" data-def>${isDef(p.id, m.id) ? "По умолчанию" : "Сделать по умолчанию"} ›</span>`}`;
     b.onclick = (e) => {
       if (soon) return toast(`${m.name} скоро появится — следите за обновлениями`);
       if (e.target.closest("[data-def]")) {
@@ -1234,8 +1234,8 @@ function humanError(e) {
   const st = e.status;
   const msg = String(e.error || "");
   // лимит тарифа XroMax: сообщение приходит с сайта уже понятным (на языке пользователя)
-  if (/5-hour|weekly|5-часов|недельн|лимит/i.test(msg) && /limit|лимит/i.test(msg)) return "Лимит тарифа: " + msg.replace(/^Error:\s*/, "") + " Бесплатные модели (Truo, Particle, Ling, Nemotron) работают без лимитов тарифа.";
-  if (/isn.t available on the|недоступна на плане|not available on the/i.test(msg)) return msg + " Выберите бесплатную модель или повысьте тариф на сайте.";
+  if (/5-hour|weekly|5-часов|недельн|лимит/i.test(msg) && /limit|лимит/i.test(msg)) return "Лимит: " + msg.replace(/^Error:\s*/, "") + " XroMax 2.0 Truo и Lite работают без лимитов.";
+  if (/isn.t available on the|недоступна на плане|not available on the/i.test(msg)) return msg + " Выберите другую модель.";
   if (st === 401 || st === 403) return "Ключ не подошёл (" + st + "). Проверьте его в настройках поставщика.";
   if (st === 402) return "На балансе поставщика закончились деньги.";
   if (st === 429) return "Поставщик просит подождать: слишком много запросов. Попробуйте через минуту.";
