@@ -24,11 +24,12 @@ async function post(pathname, body, token) {
   return j;
 }
 async function get(pathname, token) {
-  const res = await fetch(ORIGIN + pathname, { headers: { "User-Agent": "XroMaxCode", Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(30_000) });
+  const res = await fetch(ORIGIN + pathname, { headers: { "User-Agent": "XroMaxCode", "X-XC-Version": process.env.XC_APP_VERSION || "", Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(30_000) });
   const j = await res.json().catch(() => ({}));
   if (!res.ok) {
     const e = new Error(j.error || `HTTP ${res.status}`);
     e.status = res.status;
+    e.data = j;
     throw e;
   }
   return j;

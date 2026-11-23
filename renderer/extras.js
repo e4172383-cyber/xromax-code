@@ -130,7 +130,58 @@ window.refreshGptLimits = async () => {
 window.refreshLimits = () => (window.refreshGptLimits(), window.xc.auth.refresh());
 setInterval(() => (window.refreshGptLimits(), app.account && window.xc.auth.refresh()), 60_000);
 
+/** Обязательное обновление: версия ниже минимальной — пользоваться нельзя, пока не обновишь */
+function showUpdateRequired(p) {
+  let el = document.getElementById("upd-required");
+  if (!p) {
+    window.__policyUpd = null;
+    return el?.remove();
+  }
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "upd-required";
+    document.body.appendChild(el);
+  }
+  el.innerHTML = `<div class="ban-box"><div class="ban-ico">⬆</div><h2>Нужно обновить XroMax Code</h2><p>Ваша версия ${esc(p.current)} устарела — нужна ${esc(p.minDisplay)} или новее. Пока приложение не обновлено, пользоваться им нельзя.</p>${p.note ? `<p><b>${esc(p.note)}</b></p>` : ""}<div class="ban-act"><button class="btn primary" data-upd>Обновить сейчас</button>${p.download ? '<button class="btn" data-site>Скачать с сайта</button>' : ""}</div><small data-st>Обновление скачается и установится само, приложение перезапустится.</small></div>`;
+  const st = el.querySelector("[data-st]");
+  const btn = el.querySelector("[data-upd]");
+  window.__policyUpd = (s) => {
+    if (!s) return;
+    if (s.state === "available") st.textContent = `Доступна версия ${s.name || s.version} — нажмите «Обновить сейчас».`;
+    if (s.state === "downloading") ((st.textContent = `Скачивание ${s.percent ?? 0}%…`), (btn.disabled = true));
+    if (s.state === "verifying") st.textContent = "Проверка подписи…";
+    if (s.state === "restarting") st.textContent = "Перезапуск…";
+    if (s.state === "error") ((st.textContent = (s.message || "Не получилось обновиться") + " — скачайте установщик с сайта."), (btn.disabled = false));
+  };
+  btn.onclick = async () => {
+    btn.disabled = true;
+    st.textContent = "Проверяю обновление…";
+    const s = await window.xc.update.get();
+    if (s?.state === "available") return window.xc.update.download();
+    await window.xc.update.check();
+    setTimeout(async () => {
+      const s2 = await window.xc.update.get();
+      if (s2?.state === "available") window.xc.update.download();
+      else ((btn.disabled = false), (st.textContent = "Обновление пока не найдено — скачайте установщик с сайта."));
+    }, 4000);
+  };
+  el.querySelector("[data-site]")?.addEventListener("click", () => window.xc.openExternal(p.download));
+}
+/** Экран блокировки: аккаунт заблокирован за попытки обойти приложение — пользоваться нельзя, можно подать апелляцию */
+function showBanned(b) {
+  let el = document.getElementById("ban-screen");
+  if (!b) return el?.remove();
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "ban-screen";
+    document.body.appendChild(el);
+  }
+  el.innerHTML = `<div class="ban-box"><div class="ban-ico">⛔</div><h2>Аккаунт заблокирован</h2><p>${esc(b.message)}</p><div class="ban-act">${b.appealUrl ? '<button class="btn primary" data-appeal>Подать апелляцию на сайте</button>' : ""}<button class="btn" data-recheck>Проверить снова</button></div><small>После рассмотрения апелляции доступ вернётся сам — нажмите «Проверить снова».</small></div>`;
+  el.querySelector("[data-appeal]")?.addEventListener("click", () => window.xc.openExternal(b.appealUrl));
+  el.querySelector("[data-recheck]").addEventListener("click", () => window.xc.auth.refresh());
+}
 function onAuth(acc) {
+  showBanned(acc?.banned || null);
   if (acc && acc.user) {
     app.account = acc;
     signinBox().classList.add("hidden");
@@ -654,6 +705,9 @@ document.addEventListener("keydown", (e) => {
   $("#limits-btn").onclick = limitsPopover;
   $("#side-toggle").onclick = toggleSidebar2;
   window.xc.update.onState(renderUpdate);
+  window.xc.update.onState((s) => window.__policyUpd?.(s));
+  window.xc.policy?.onState(showUpdateRequired);
+  window.xc.policy?.get().then(showUpdateRequired).catch(() => {});
   renderUpdate(await window.xc.update.get());
   window.xc.auth.onChanged(onAuth);
   onAuth(await window.xc.auth.get());

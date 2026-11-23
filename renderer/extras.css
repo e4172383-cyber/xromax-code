@@ -167,6 +167,16 @@
 .bug-btn.send { background: var(--text); color: var(--bg); }
 .bug-btn.send:disabled { background: var(--bg-soft); color: var(--text-3); cursor: default; }
 
+/* ───── экран блокировки аккаунта и обязательного обновления ───── */
+#upd-required { position: fixed; inset: 0; z-index: 101; background: rgba(250, 250, 248, .98); display: grid; place-items: center; padding: 20px; animation: fade .3s var(--ease); }
+#ban-screen { position: fixed; inset: 0; z-index: 100; background: rgba(250, 250, 248, .97); display: grid; place-items: center; padding: 20px; animation: fade .3s var(--ease); }
+.ban-box { max-width: 520px; text-align: center; display: grid; gap: 12px; animation: modal-in .4s var(--ease); }
+.ban-box h2 { margin: 0; font-size: 22px; }
+.ban-box p { margin: 0; color: var(--text-2, #555); line-height: 1.55; }
+.ban-box small { color: var(--text-3, #888); }
+.ban-ico { font-size: 40px; }
+.ban-act { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+
 /* ───── генерация картинок ───── */
 .genimg { margin: 10px 0; border-radius: 14px; overflow: hidden; max-width: 520px; border: 1px solid var(--border, #2a2a2a); background: var(--bg-2, #151515); }
 .genimg.loading { position: relative; min-height: 220px; display: flex; align-items: flex-end; }

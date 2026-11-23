@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld("xc", {
   image: { choose: call("image:choose") },
   limits: { reset: call("limits:reset") },
   net: { check: call("net:check"), onState: on("net:state") },
+  policy: { get: call("policy:get"), onState: on("policy:state") },
   chatgpt: { login: call("chatgpt:login"), logout: call("chatgpt:logout"), info: call("chatgpt:info"), limits: call("chatgpt:limits") },
   providers: { list: call("providers:list"), setKey: call("providers:setKey"), addCustom: call("providers:addCustom"), removeCustom: call("providers:removeCustom") },
   projects: { pick: call("projects:pick"), open: call("projects:open") },

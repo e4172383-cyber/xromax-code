@@ -11,6 +11,7 @@ const { runAgent, compressHistory } = require("./core/agent");
 const account = require("./core/account");
 const importers = require("./core/importers");
 const chatgpt = require("./core/chatgpt");
+const device = require("./core/device");
 const mentions = require("./core/mentions");
 ipcMain.handle("files:search", (_e, { workspace, q }) => mentions.searchFiles(workspace, q).catch(() => []));
 const { createUpdater } = require("./core/updater");
@@ -251,8 +252,18 @@ let mcp = null;
 const backups = account.createBackupQueue(() => (settings.prefs?.chatCopies === false ? null : accountToken()), (id) => getSession(id));
 
 app.whenReady().then(async () => {
+  process.env.XC_APP_VERSION = app.getVersion();
   loadSettings();
+  // обязательные обновления: проверяем минимальную версию сразу и каждые 5 минут
+  setTimeout(checkPolicy, 4000);
+  setInterval(checkPolicy, 5 * 60_000);
   chatgpt.init({ file: path.join(DATA(), "chatgpt-auth.json"), enc, dec, openExternal: (u) => shell.openExternal(u) });
+  // ключ устройства для подписи запросов к серверу XroMax
+  device.init({ get: () => settings.device || null, set: (d) => ((settings.device = d), saveSettings()), enc, dec, origin: account.ORIGIN, token: () => accountToken() });
+  const signFn = (m, p, b) => device.sign(m, p, b);
+  signFn.forget = () => device.forget();
+  require("./core/llm").setSigner(signFn);
+  device.ensureRegistered().catch(() => {});
   loadModelsCache();
   skills.init(DATA());
   mcp = new McpManager(os.homedir());
@@ -364,7 +375,9 @@ ipcMain.handle("image:choose", (_e, { reqId, choice }) => {
 /** Бесплатная генерация картинок XroMax (бэкенд на сервере, не раскрывается) */
 async function xromaxImage(prompt, signal) {
   const base = providerById("xromax-free").baseUrl.replace(/\/v1\/free$/, "");
-  const res = await fetch(`${base}/v1/free/images`, { method: "POST", signal, headers: { "Content-Type": "application/json", Authorization: `Bearer ${accountToken()}` }, body: JSON.stringify({ prompt }) });
+  const bodyStr = JSON.stringify({ prompt });
+  const sig = await device.sign("POST", "/v1/free/images", bodyStr);
+  const res = await fetch(`${base}/v1/free/images`, { method: "POST", signal, headers: { "Content-Type": "application/json", "X-XC-Version": app.getVersion(), Authorization: `Bearer ${accountToken()}`, ...sig }, body: bodyStr });
   const j = await res.json().catch(() => ({}));
   if (!res.ok || !j.image) throw new Error(j.error?.message || `XroMax: ${res.status}`);
   return j.image;
@@ -657,7 +670,7 @@ function notify(kind, title, body) {
 }
 
 // ───────── аккаунт (вход через сайт) ─────────
-const publicAccount = () => (settings.account?.token ? { user: settings.account.user, plan: settings.account.plan ?? null, limits: settings.account.limits ?? null, estimates: settings.account.estimates ?? null, tests: settings.account.tests ?? null, resets: settings.account.resets ?? null } : null);
+const publicAccount = () => (settings.account?.token ? { user: settings.account.user, plan: settings.account.plan ?? null, limits: settings.account.limits ?? null, estimates: settings.account.estimates ?? null, tests: settings.account.tests ?? null, resets: settings.account.resets ?? null, banned: settings.account.banned ?? null } : null);
 let signIn = null; // { ctrl, code, providers }
 ipcMain.handle("auth:get", () => publicAccount());
 // обновить тариф и лимиты с сайта (вызывается после ответа XroMax-модели)
@@ -720,10 +733,18 @@ ipcMain.handle("auth:refresh", async () => {
       settings.account.estimates = m.estimates;
         settings.account.tests = m.tests ?? null;
       settings.account.resets = m.resets ?? null;
+      settings.account.banned = null; // сервер ответил нормально — блокировки нет
       saveSettings();
       send("auth:changed", publicAccount());
     }
-  } catch {}
+  } catch (e) {
+    // аккаунт заблокирован: показываем экран блокировки с причиной и ссылкой на апелляцию
+    if (e?.status === 403 && e.data?.banned && settings.account) {
+      settings.account.banned = { message: String(e.data.message || "Аккаунт заблокирован."), appealUrl: String(e.data.appealUrl || "") };
+      saveSettings();
+      send("auth:changed", publicAccount());
+    }
+  }
   return publicAccount();
 });
 ipcMain.handle("auth:start", async () => {
@@ -795,6 +816,26 @@ ipcMain.handle("backup:restore", async (_e, id) => {
 // ───────── обновления ─────────
 ipcMain.handle("update:get", () => updater?.get() ?? { state: "idle" });
 ipcMain.handle("update:download", () => updater?.download());
+// ───── обязательное обновление: версия ниже минимальной на сервере — приложение блокируется до обновления ─────
+let policyBlock = null;
+const cmpVer = (a, b) => {
+  const pa = String(a).split(".").map(Number);
+  const pb = String(b).split(".").map(Number);
+  for (let i = 0; i < 3; i++) if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) - (pb[i] || 0);
+  return 0;
+};
+async function checkPolicy() {
+  try {
+    const r = await fetch(account.ORIGIN + "/v1/code/policy", { cache: "no-store", signal: AbortSignal.timeout(15_000) });
+    if (!r.ok) return;
+    const p = await r.json();
+    const need = typeof p.minVersion === "string" && cmpVer(app.getVersion(), p.minVersion) < 0;
+    policyBlock = need ? { minDisplay: p.minDisplay || p.minVersion, note: p.note || "", download: p.download || "", current: require("./package.json").displayVersion || app.getVersion() } : null;
+    send("policy:state", policyBlock);
+    if (need) updater?.check();
+  } catch {}
+}
+ipcMain.handle("policy:get", () => policyBlock);
 ipcMain.handle("update:check", () => updater?.check());
 
 // ───────── плагины, скиллы, коннекторы ─────────

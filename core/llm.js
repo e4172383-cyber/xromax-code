@@ -85,10 +85,22 @@ async function openaiOnce({ provider, key, model, system, history, tools, thinki
   if (provider.id === "openrouter") Object.assign(headers, { "HTTP-Referer": "https://xromax-ai.defhosting.com", "X-Title": "XroMax Code" });
   if (provider.id === "xromax-free") {
     headers["X-Client"] = "XroMax Code";
+    if (process.env.XC_APP_VERSION) headers["X-XC-Version"] = process.env.XC_APP_VERSION; // сервер проверяет минимальную версию
     headers.Cookie = "xromax_lang=ru"; // сообщения сайта (лимиты, ошибки) — на русском
   }
 
-  const res = await fetch(provider.baseUrl + "/chat/completions", { method: "POST", signal, headers, body: JSON.stringify(body) });
+  const bodyStr = JSON.stringify(body);
+  const url = provider.baseUrl + "/chat/completions";
+  // запросы к серверу XroMax подписаны ключом этого устройства (core/device.js)
+  const send = async () => fetch(url, { method: "POST", signal, headers: provider.id === "xromax-free" && signer ? { ...headers, ...(await signer("POST", new URL(url).pathname, bodyStr)) } : headers, body: bodyStr });
+  let res = await send();
+  if (res.status === 403 && provider.id === "xromax-free" && signer) {
+    const t = await res.clone().text().catch(() => "");
+    if (t.includes("device_not_registered")) {
+      signer.forget?.();
+      res = await send();
+    }
+  }
   if (!res.ok) {
     let msg = await res.text().catch(() => "");
     try {
@@ -267,4 +279,8 @@ async function complete(opts) {
   }
 }
 
-module.exports = { complete, ApiError, toAnthropic, withRetry, retryKind, RETRY };
+/** Подпись запросов к серверу XroMax: (method, path, body) → заголовки; ставит main.js */
+let signer = null;
+const setSigner = (fn) => (signer = fn);
+
+module.exports = { complete, ApiError, toAnthropic, withRetry, retryKind, RETRY, setSigner };
