@@ -2,7 +2,7 @@
 // Режим доступа решает, о чём спрашивать человека. UltraCode добавляет инструмент run_subagents:
 // главный агент запускает до 11 субагентов параллельно (исполнители, критики, тестировщики, дизайн-ревью).
 const os = require("os");
-const { TOOLS, runTool, assessRisk, needsApproval, clip } = require("./tools");
+const { TOOLS, runTool, assessRisk, needsApproval, clip, READ_ONLY } = require("./tools");
 const { complete } = require("./llm");
 const { shrinkHistory, shrinkTools } = require("./saver");
 
@@ -67,6 +67,12 @@ const GENERATE_IMAGE_TOOL = {
   description: "Generate an image (picture, photo, illustration, logo, texture). Call it whenever the user asks to draw or create an image. The app asks the user which generator to use and how strong; the picture is saved in the workspace (generated-images) and shown to the user. Write a rich, specific English prompt.",
   parameters: { type: "object", properties: { prompt: { type: "string", description: "Detailed description of the image." } }, required: ["prompt"] },
 };
+
+/** Тестовый режим «Быстрая разработка»: один агент без субагентов, минимум текста, параллельные вызовы, длинное — в фоне */
+const FAST_DEV_TEXT =
+  "FAST DEVELOPMENT MODE (test). You work ALONE as one agent: no sub-agents. Be extremely fast and terse: no plans, no explanations, no recaps — just act. " +
+  "Put independent tool calls in ONE step (several read/search/list calls together). Never wait idly: start anything slow (installs, downloads, builds, servers, Tor, big file downloads) with run_command background:true and continue with other work immediately; " +
+  "check it later with command_status only when you need its result, and verify everything at the end. When done, answer in at most two short lines.";
 
 const USE_SKILL_TOOL = {
   name: "use_skill",
@@ -189,9 +195,10 @@ async function runAgent(opts) {
     ...(opts.ultra && !role ? [subTool] : []),
     ...(!role && opts.onCreateAgent ? [CREATE_AGENT_TOOL] : []),
     ...(!role && opts.onImage ? [GENERATE_IMAGE_TOOL] : []),
-    ...(!role && customAgents.length ? [RUN_AGENT_TOOL] : []),
+    ...(!role && customAgents.length && !(opts.fastDev && !opts.ultra) ? [RUN_AGENT_TOOL] : []), // в «Быстрой разработке» без UltraCode субагентов нет
   ].filter((t) => !planMode || PLAN_TOOLS.has(t.name)); // в режиме плана — только чтение и поиск
   let system = systemPrompt(opts);
+  if (opts.fastDev && !role) system += "\n\n" + FAST_DEV_TEXT;
   if (skillList.length) {
     system +=
       "\n\nSkills (ready instructions for specific tasks). When a task matches a skill, call use_skill with its name first and follow it:\n" +
@@ -219,7 +226,7 @@ async function runAgent(opts) {
       tools: opts.superSaver ? shrinkTools(tools) : tools,
       // супер-экономия: «Default» → Low (не заморачивается), явно выбранный уровень и UltraCode не трогаем
       fast: !!opts.fast,
-      thinking: opts.superSaver && (!opts.thinking || opts.thinking === "default") && !opts.ultra ? "low" : opts.thinking,
+      thinking: (opts.superSaver || opts.fastDev) && (!opts.thinking || opts.thinking === "default") && !opts.ultra ? "low" : opts.thinking,
       signal,
       onText: (t) => ev({ type: "text", text: t }),
       onThinking: (t) => ev({ type: "thinking", text: t }),
@@ -272,6 +279,18 @@ async function runAgent(opts) {
       ...r.assistantExtra,
     });
 
+    // «Быстрая разработка»: подряд идущие вызовы только на чтение выполняем параллельно, заранее
+    const pre = new Map();
+    if (opts.fastDev && calls.length > 1) {
+      const par = [];
+      for (const c of calls) {
+        if (!READ_ONLY.has(c.name)) continue;
+        try {
+          par.push({ c, a: c.args ? JSON.parse(c.args) : {} });
+        } catch {}
+      }
+      if (par.length > 1) await Promise.all(par.map(async ({ c, a }) => pre.set(c.id, await runTool(c.name, a, { ...opts.ctx, workspace: opts.workspace, signal }).catch((e) => `Error: ${e.message}`))));
+    }
     for (const c of calls) {
       let args;
       try {
@@ -299,6 +318,10 @@ async function runAgent(opts) {
         } catch (e) {
           result = `Could not create: ${String(e.message || e)}`;
         }
+      } else if (c.name === "run_custom_agent" && !role && opts.fastDev && !opts.ultra) {
+        result = "Sub-agents are disabled in Fast Development mode (turn on UltraCode to use them). Do the work yourself.";
+      } else if (pre.has(c.id)) {
+        result = pre.get(c.id);
       } else if (c.name === "run_custom_agent" && !role) {
         const a = customAgents.find((x) => x.name === String(args.agent || "").trim());
         result = a ? await runSubagents(opts, { agents: [{ role: "custom", title: a.name, task: String(args.task || ""), prompt: a.prompt, model: a.model }] }, allowedInSession) : `No such custom sub-agent. Available: ${customAgents.map((x) => x.name).join(", ") || "none"}`;

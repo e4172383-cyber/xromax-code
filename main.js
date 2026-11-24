@@ -12,6 +12,11 @@ const account = require("./core/account");
 const importers = require("./core/importers");
 const chatgpt = require("./core/chatgpt");
 const device = require("./core/device");
+const integrity = require("./core/integrity");
+const applog = require("./core/applog");
+const { stopBackground } = require("./core/tools");
+const clientguard = require("./core/clientguard");
+applog.hookConsole();
 const mentions = require("./core/mentions");
 ipcMain.handle("files:search", (_e, { workspace, q }) => mentions.searchFiles(workspace, q).catch(() => []));
 const { createUpdater } = require("./core/updater");
@@ -110,6 +115,7 @@ const DEFAULT_PREFS = {
   hiddenModels: [], // "провайдер/модель" — скрыты из выбора
   autoCompress: true,
   superSaver: false, // бета: супер-экономия токенов
+  fastDev: false, // тестовый режим: быстрая разработка (один агент, параллельно, фон, минимум текста)
   thinkingOpen: false,
   maxParallel: 11,
   customAgents: [], // свои субагенты: {name, description, prompt, enabled}
@@ -251,11 +257,35 @@ let mcp = null;
 // копии чатов уходят в аккаунт, только если это не выключено в «Конфиденциальности»
 const backups = account.createBackupQueue(() => (settings.prefs?.chatCopies === false ? null : accountToken()), (id) => getSession(id));
 
+// ───── целостность файлов приложения: изменённые файлы → блокировка до установки официального обновления ─────
+let tampered = null; // { reason, count }
+function checkIntegrity() {
+  if (!app.isPackaged && !process.env.XC_INTEGRITY_TEST) return;
+  try {
+    const pub = fs.readFileSync(path.join(__dirname, "signing", "update-public.pem"), "utf8");
+    const r = integrity.verify(__dirname, pub);
+    tampered = r.ok ? null : { reason: r.reason, count: r.changed.length };
+    // вмешательство в запуск: отладчик, подмена Node, внедрение модулей через переменные окружения
+    if (!tampered && !process.env.XC_ALLOW_DEBUG) {
+      const bad = process.argv.some((a) => /^--(inspect|inspect-brk|remote-debugging-port|remote-debugging-pipe|js-flags)/.test(a)) || !!process.env.NODE_OPTIONS || !!process.env.ELECTRON_RUN_AS_NODE;
+      if (bad) tampered = { reason: "debug-injection", count: 0 };
+    }
+  } catch {
+    tampered = { reason: "check-failed", count: 0 };
+  }
+  if (tampered) applog.add("ERROR", "integrity " + JSON.stringify(tampered));
+  if (tampered) console.warn("[integrity]", JSON.stringify(tampered));
+  send("tamper:state", tampered);
+}
+ipcMain.handle("tamper:get", () => tampered);
+app.on("before-quit", () => stopBackground()); // фоновые команды агента не остаются жить после выхода
 app.whenReady().then(async () => {
   process.env.XC_APP_VERSION = app.getVersion();
   loadSettings();
   // обязательные обновления: проверяем минимальную версию сразу и каждые 5 минут
   setTimeout(checkPolicy, 4000);
+  setTimeout(checkIntegrity, 1500);
+  setInterval(checkIntegrity, 2 * 60_000); // проверка каждые 2 минуты и перед каждым запросом агента
   setInterval(checkPolicy, 5 * 60_000);
   chatgpt.init({ file: path.join(DATA(), "chatgpt-auth.json"), enc, dec, openExternal: (u) => shell.openExternal(u) });
   // ключ устройства для подписи запросов к серверу XroMax
@@ -486,6 +516,44 @@ nativeTheme.on("updated", () => {
   applyPrefs();
   send("prefs:theme", nativeTheme.shouldUseDarkColors);
 });
+// сведения для страницы «О программе»
+ipcMain.handle("about:info", () => {
+  let chats = 0;
+  try {
+    chats = fs.readdirSync(SESSIONS_DIR()).filter((f) => f.endsWith(".json")).length;
+  } catch {}
+  const pj = require("./package.json");
+  return {
+    version: pj.displayVersion || app.getVersion(),
+    internal: app.getVersion(),
+    electron: process.versions.electron,
+    chrome: process.versions.chrome,
+    node: process.versions.node,
+    os: `${os.type()} ${os.release()}`,
+    arch: process.arch,
+    dataDir: DATA(),
+    chats,
+    uptimeMin: Math.round(process.uptime() / 60),
+    packaged: app.isPackaged,
+  };
+});
+// бета «Быстрая модель»: переключатель хранится на сервере (только при платном плане)
+ipcMain.handle("fast:set", async (_e, on) => {
+  if (!accountToken()) return { ok: false, error: "Войдите в аккаунт" };
+  try {
+    const res = await fetch(account.ORIGIN + "/v1/code/fast", { method: "POST", headers: { "User-Agent": "XroMaxCode", "Content-Type": "application/json", Authorization: `Bearer ${accountToken()}` }, body: JSON.stringify({ enabled: !!on }), signal: AbortSignal.timeout(20_000) });
+    const j = await res.json().catch(() => ({}));
+    if (settings.account && j.fast) {
+      settings.account.fast = j.fast;
+      saveSettings();
+      send("auth:changed", publicAccount());
+    }
+    return res.ok ? { ok: true, fast: j.fast } : { ok: false, error: j.error || `HTTP ${res.status}` };
+  } catch (e) {
+    return { ok: false, error: String(e.message || e).slice(0, 140) };
+  }
+});
+ipcMain.handle("about:openData", () => shell.openPath(DATA()));
 ipcMain.handle("prefs:get", () => ({ prefs: settings.prefs, dark: nativeTheme.shouldUseDarkColors, version: app.getVersion() }));
 ipcMain.handle("prefs:set", (_e, patch) => {
   settings.prefs = { ...settings.prefs, ...patch };
@@ -649,6 +717,7 @@ ipcMain.handle("bug:send", async (_e, { text, images, sessionId }) => {
       model: s?.modelRef ? `${s.modelRef.provider}/${s.modelRef.model}` : null,
       access: s?.access ?? null,
       recent,
+      logs: applog.tail().map(String), // последние строки журнала приложения — чтобы сразу видеть причину
     });
     return { ok: true, id: r.id };
   } catch (e) {
@@ -670,7 +739,7 @@ function notify(kind, title, body) {
 }
 
 // ───────── аккаунт (вход через сайт) ─────────
-const publicAccount = () => (settings.account?.token ? { user: settings.account.user, plan: settings.account.plan ?? null, limits: settings.account.limits ?? null, estimates: settings.account.estimates ?? null, tests: settings.account.tests ?? null, resets: settings.account.resets ?? null, banned: settings.account.banned ?? null } : null);
+const publicAccount = () => (settings.account?.token ? { user: settings.account.user, plan: settings.account.plan ?? null, limits: settings.account.limits ?? null, estimates: settings.account.estimates ?? null, tests: settings.account.tests ?? null, resets: settings.account.resets ?? null, banned: settings.account.banned ?? null, codePlan: settings.account.codePlan ?? null, plans: settings.account.plans ?? null, fast: settings.account.fast ?? null } : null);
 let signIn = null; // { ctrl, code, providers }
 ipcMain.handle("auth:get", () => publicAccount());
 // обновить тариф и лимиты с сайта (вызывается после ответа XroMax-модели)
@@ -733,6 +802,9 @@ ipcMain.handle("auth:refresh", async () => {
       settings.account.estimates = m.estimates;
         settings.account.tests = m.tests ?? null;
       settings.account.resets = m.resets ?? null;
+      settings.account.codePlan = m.codePlan ?? null;
+      settings.account.plans = m.plans ?? null;
+      settings.account.fast = m.fast ?? null; // бета «Быстрая модель»: { available, enabled } — сервер сам выключает, когда план закончился
       settings.account.banned = null; // сервер ответил нормально — блокировки нет
       saveSettings();
       send("auth:changed", publicAccount());
@@ -937,6 +1009,16 @@ function addSpend(s, model, usage) {
 
 /** Отправить сообщение в сессию: { id, text, modelRef, thinking, access, ultra, workspace } */
 ipcMain.handle("agent:run", async (_e, req) => {
+  checkIntegrity(); // свежая проверка перед каждым запросом
+  if (tampered) return { ok: false, error: "Файлы приложения изменены. Установите официальное обновление XroMax Code." };
+  // быстрая проверка запроса до отправки на сервер (джейлбрейки, обход защиты)
+  if (!req.resume && req.modelRef?.provider === "xromax-free") {
+    const why = clientguard.check(req.text);
+    if (why) {
+      applog.add("WARN", "запрос заблокирован на клиенте: " + why.slice(0, 80));
+      return { ok: false, error: why };
+    }
+  }
   if (running.has(req.id)) return { ok: false, error: "Агент уже работает в этой сессии" };
   const p = providerById(req.modelRef?.provider);
   if (!p || !hasAccess(p)) return { ok: false, error: "Подключите поставщика этой модели в настройках" };
@@ -1030,6 +1112,7 @@ ipcMain.handle("agent:run", async (_e, req) => {
       folders: { desktop: app.getPath("desktop"), documents: app.getPath("documents"), downloads: app.getPath("downloads") },
       customAgents: settings.prefs.customAgents || [],
       superSaver: !!settings.prefs.superSaver,
+      fastDev: !!settings.prefs.fastDev,
       fast: !!req.fast && p.kind === "chatgpt", // быстрый режим — только для подписки ChatGPT
       onImage: p.noTools ? null : async (a) => {
         const reqId = `${req.id}:img${++reqSeq}`;
@@ -1075,6 +1158,7 @@ ipcMain.handle("agent:run", async (_e, req) => {
           ctrl.signal.addEventListener("abort", () => resolve("deny"), { once: true });
         }),
       ev: (e) => {
+        applog.agentEvent(req.id, e);
         if (e.type === "usage") {
           const cost = addSpend(s, model, e.usage);
           s.stats.contextTokens = (e.usage.input ?? 0) + (e.usage.cacheRead ?? 0) + (e.usage.cacheWrite ?? 0) + (e.usage.output ?? 0);

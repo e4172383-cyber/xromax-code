@@ -22,7 +22,7 @@ async function startSignin() {
   const r = await window.xc.auth.start();
   if (!r.ok) return showSignin("Не удалось связаться с сайтом: " + r.error);
   signinState = r;
-  box.querySelector(".si-box").innerHTML = `<div id="si-logo"></div><h2>Подтвердите вход на сайте</h2><p>Войдите в браузере и введите там этот код:</p>
+  box.querySelector(".si-box").innerHTML = `<div id="si-logo"></div><h2>Подтвердите вход на сайте</h2><p>1. Нажмите кнопку ниже — откроется сайт.<br>2. Подтвердите вход в Telegram.<br>3. Введите на сайте этот код — аккаунт создастся сам:</p>
     <div class="si-code">${esc(r.code)}</div>
     <div class="si-btns">${r.providers.map((p) => `<button class="si-btn ${p.id === "github" ? "primary" : ""}" data-url="${esc(p.url)}">Войти через ${esc(p.name)}</button>`).join("")}</div>
     <div class="si-wait">Ждём подтверждения на сайте…</div>
@@ -130,6 +130,35 @@ window.refreshGptLimits = async () => {
 window.refreshLimits = () => (window.refreshGptLimits(), window.xc.auth.refresh());
 setInterval(() => (window.refreshGptLimits(), app.account && window.xc.auth.refresh()), 60_000);
 
+/** Файлы приложения изменены: пользоваться нельзя, пока не установлено официальное обновление */
+function showTampered(t) {
+  let el = document.getElementById("tamper-screen");
+  if (!t) return el?.remove();
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "tamper-screen";
+    document.body.appendChild(el);
+  }
+  el.innerHTML = `<div class="ban-box"><div class="ban-ico">🛡</div><h2>Установите обновление</h2><p>Файлы приложения были изменены, поэтому оно заблокировано: код и дизайн XroMax Code защищены. Установите официальное обновление — приложение снова заработает, ваши чаты и настройки сохранятся.</p><div class="ban-act"><button class="btn primary" data-upd>Установить обновление</button><button class="btn" data-site>Скачать установщик с сайта</button></div><small data-st>Обновление скачается и установится само, приложение перезапустится.</small></div>`;
+  const st = el.querySelector("[data-st]");
+  const btn = el.querySelector("[data-upd]");
+  btn.onclick = async () => {
+    btn.disabled = true;
+    st.textContent = "Проверяю обновление…";
+    await window.xc.update.check();
+    setTimeout(async () => {
+      const s = await window.xc.update.get();
+      if (s?.state === "available") {
+        st.textContent = "Скачиваю…";
+        window.xc.update.download();
+      } else {
+        btn.disabled = false;
+        st.textContent = "Автообновление недоступно — скачайте установщик с сайта и установите поверх.";
+      }
+    }, 4000);
+  };
+  el.querySelector("[data-site]").onclick = () => window.xc.openExternal("https://xromax-ai.defhosting.com/downloads/code/XroMax-Code-Setup.exe");
+}
 /** Обязательное обновление: версия ниже минимальной — пользоваться нельзя, пока не обновишь */
 function showUpdateRequired(p) {
   let el = document.getElementById("upd-required");
@@ -707,6 +736,8 @@ document.addEventListener("keydown", (e) => {
   window.xc.update.onState(renderUpdate);
   window.xc.update.onState((s) => window.__policyUpd?.(s));
   window.xc.policy?.onState(showUpdateRequired);
+  window.xc.tamper?.onState(showTampered);
+  window.xc.tamper?.get().then(showTampered).catch(() => {});
   window.xc.policy?.get().then(showUpdateRequired).catch(() => {});
   renderUpdate(await window.xc.update.get());
   window.xc.auth.onChanged(onAuth);

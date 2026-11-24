@@ -303,9 +303,9 @@ async function drawSection() {
     const resetBtn = (w, n, label) => `<div class="st-row"><div class="t"><b>${label}</b><span>${n > 0 ? `Доступно: ${n}. Сразу освобождает лимит.` : "Уже использован"}</span></div><button class="btn ${n > 0 ? "primary" : ""}" data-reset="${w}" ${n > 0 ? "" : "disabled"}>Сбросить</button></div>`;
     html =
       head("Лимиты", "Расход общих лимитов XroMax и лимиты подписки ChatGPT") +
-      (acc ? `<h3>Аккаунт XroMax</h3><div class="st-card">${row(esc(acc.user?.name || "Аккаунт"), "XroMax Code бесплатный — без подписок и оплаты", "")}</div>` : `<div class="st-card">${row("Вы не вошли", "Войдите через сайт, чтобы видеть лимиты", "")}</div>`) +
+      (acc ? `<h3>Аккаунт XroMax</h3><div class="st-card">${row(esc(acc.user?.name || "Аккаунт"), "Ваш план: " + esc((acc.codePlan?.badge ? acc.codePlan.badge + " " : "") + (acc.codePlan?.name || "Бесплатный")) + (acc.codePlan?.until ? " · до " + new Date(acc.codePlan.until).toLocaleDateString("ru-RU") : ""), "")}</div>` + plansHtml(acc) : `<div class="st-card">${row("Вы не вошли", "Войдите через сайт, чтобы видеть лимиты", "")}</div>`) +
       (T ? `<h3>Общий лимит XroMax</h3><p class="st-sub">Helium, Xenon и Claude 5.5 тратят один счётчик. Модели 2.0 (Truo, Lite) — без лимитов.</p><div class="st-card">${bar("5 часов", T.pct5h, T.reset5h)}${bar("Неделя", T.pctWeek, T.resetWeek)}</div>` +
-        `<h3>Сбросы лимитов</h3><p class="st-sub">Каждому — по одному сбросу. Сброс недели обнуляет и 5-часовой лимит.</p><div class="st-card">${resetBtn("5h", R.h5, "Сброс 5-часового лимита")}${resetBtn("week", R.week, "Сброс недельного лимита")}</div>` : "") +
+        `<h3>Сбросы лимитов</h3><p class="st-sub">Сбросы — как карточки: копятся и тратятся в любой момент, когда нужно. Сброс недели обнуляет и 5-часовой лимит.</p><div class="st-card">${resetBtn("5h", R.h5, "Сброс 5-часового лимита")}${resetBtn("week", R.week, "Сброс недельного лимита")}</div>` : "") +
       `<h3>Подписка ChatGPT</h3><div class="st-card" data-gptlim>${row("ChatGPT", "Проверяю…", "")}</div>`;
     setTimeout(async () => {
       const box = document.querySelector("#settings-page [data-gptlim]");
@@ -335,7 +335,11 @@ async function drawSection() {
     html =
       head("Экспериментальное", "Функции, которые ещё дорабатываются") +
       `<div class="st-card">` +
+      row('Быстрая разработка <span class="badge">тест</span>', "ИИ работает один (без субагентов, если не включён UltraCode), пишет минимум и делает всё как можно быстрее: независимые чтения файлов идут параллельно, долгое (установки, загрузки, сборки, Tor) запускает в фоне и сразу идёт дальше, а результат проверяет позже. Мышление по умолчанию — Low", tog("fastDev", p.fastDev)) +
       row('Супер-экономия токенов <span class="badge">бета</span>', "Работает с любой моделью, в том числе с подпиской ChatGPT. Старые результаты инструментов и повторные чтения файлов сокращаются, контекст сжимается раньше (при 60%), а при уровне «Default» модель думает поменьше. Обычно экономит 30–40% токенов; последние сообщения не трогаются", tog("superSaver", p.superSaver)) +
+      (app.account?.fast?.available
+        ? row('Быстрая модель <span class="badge">бета</span>', "Ответы Claude 5.5 и Uran быстрее: ваш запрос идёт вне очереди с низким мышлением. Лимит расходуется в 1,5 раза быстрее. Доступно с платным планом — когда план закончится, функция выключится сама", tog("fastBeta", !!app.account.fast.enabled))
+        : "") +
       row("Автосжатие контекста", "Когда контекст заполнен на 95%, приложение само сжимает разговор перед ответом", tog("autoCompress", p.autoCompress)) +
       row("Размышления раскрыты", "Показывать мысли модели сразу, а не свёрнутыми", tog("thinkingOpen", p.thinkingOpen)) +
       row("UltraCode: агентов параллельно", "Сколько субагентов главный агент может запустить за раз", sel("maxParallel", [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((n) => [n, String(n)]), p.maxParallel)) +
@@ -352,6 +356,7 @@ async function drawSection() {
       qa("Модель написала «сделал», но файл не создан", "Нажмите кнопку-жучок в правом нижнем углу и отправьте отзыв — это поможет исправить. Попробуйте также режим «Полный доступ» и более точный запрос.") +
       `</div><h3>Основы</h3><div class="st-card">` +
       qa("Лимиты моделей XroMax 2.5", "У Helium и Xenon общий лимит на 5 часов и на неделю, он показан в процентах. Модели 2.0 (Truo, Lite) без лимитов.") +
+      qa("Мой запрос не отправился: «в нём есть мат или оскорбления»", "Запросы к моделям Claude с матом и оскорблениями блокируются автоматически и до модели не доходят. Перепишите запрос по делу и отправьте ещё раз. Подробнее — в <a class=\"st-link\" data-url=\"https://xromax-ai.defhosting.com/policy\">правилах использования</a>: там написано, что запрещено и что может привести к блокировке аккаунта (в том числе использование ИИ ради развлечения).") +
       qa("Субагенты", "В «Субагентах» можно создать своего обученного помощника или попросить агента в чате: «создай субагента, который…». Для параллельной работы включите UltraCode.") +
       qa("@файл, план, задачи", "Упоминайте файлы через @, режим «План» сначала покажет шаги, а потом выполнит их по кнопке «Выполнить план».") +
       `</div>`;
@@ -360,10 +365,11 @@ async function drawSection() {
     html = `<div class="st-about"><p>Версия ${esc(st.version)}</p><div style="margin:18px 0 22px">${$("#logo").innerHTML}</div>
       <p><b style="color:var(--text)">XroMax Code</b> — ИИ-агент для кода на Windows от XROMAX.</p>
       <p>Любые API: свои ключи, OpenRouter, Anthropic, OpenAI, DeepSeek и другие.<br>Встроенные бесплатные модели, UltraCode, плагины, скиллы и коннекторы.</p>
-      ${acc ? `<p>Вы вошли как ${esc(acc.name)}</p>` : ""}
       <p><button class="btn" data-check-update>Проверить обновления</button></p>
-      <p><a class="st-link" data-url="https://xromax-ai.defhosting.com">xromax-ai.defhosting.com</a> · <a class="st-link" data-url="https://xromax-ai.defhosting.com/developers">XroMax API</a></p>
+      <div class="about-info" data-about></div>
+      <p><a class="st-link" data-url="https://xromax-ai.defhosting.com">Сайт</a> · <a class="st-link" data-url="https://xromax-ai.defhosting.com/plans">Планы</a> · <a class="st-link" data-url="https://github.com/e4172383-cyber/xromax-code">GitHub</a> · <a class="st-link" data-url="https://xromax-ai.defhosting.com/privacy">Конфиденциальность</a> · <a class="st-link" data-url="https://xromax-ai.defhosting.com/terms">Условия</a></p>
       <p style="color:var(--text-3)">© XROMAX</p></div>`;
+    setTimeout(fillAbout, 30);
   }
   main.innerHTML = html;
   bindSection(main);
@@ -401,6 +407,14 @@ function bindSection(main) {
           const hidden = new Set(app.prefs.hiddenModels);
           on ? hidden.delete(id) : hidden.add(id);
           return setPrefs({ hiddenModels: [...hidden] });
+        }
+        if (k === "fastBeta") {
+          const r = await window.xc.fast.set(on);
+          if (!r.ok) {
+            b.classList.toggle("on", !on);
+            toast("Не получилось: " + r.error, 4000);
+          } else app.account = { ...app.account, fast: r.fast };
+          return;
         }
         if (k.startsWith("agent:")) {
           const a = (app.prefs.customAgents || []).find((x) => x.name === k.slice(6));
@@ -641,3 +655,61 @@ function importPicker(src, sessions) {
   $("#settings-btn").onclick = () => ($("#settings-page") ? closeSettingsPage() : openSettingsPage());
   $("#settings-btn").title = "Настройки (Ctrl+,)";
 })();
+
+/** Планы XroMax Code на странице «Лимиты»: цена и во сколько раз лимит больше бесплатного; купить пока нельзя */
+function plansHtml(acc) {
+  const plans = acc?.plans;
+  if (!Array.isArray(plans) || !plans.length) return "";
+  const cur = acc.codePlan?.id || "free";
+  const x = (n) => (n === 1 ? "как бесплатный" : `примерно ×${String(n).replace(".", ",")}`);
+  const card = (p) =>
+    `<div class="plan-card ${p.id === cur ? "on" : ""}"><div class="pc-top"><b>${esc(p.badge || "")} ${esc(p.name)}</b>${p.id === cur ? '<span class="badge">ваш план</span>' : ""}</div>` +
+    `<div class="pc-price">${p.priceUsd ? "$" + String(p.priceUsd).replace(".", ",") + "<small> / мес</small>" : "Бесплатно"}</div>` +
+    `<div class="pc-lim">5 часов: ${x(p.x5h)}<br>Неделя: ${x(p.xWeek)}</div>` +
+    (Array.isArray(p.perks) && p.perks.length ? `<ul class="pc-perks">${p.perks.map((t) => `<li>${esc(t)}</li>`).join("")}</ul>` : "") +
+    (p.id === "free" ? "" : `<button class="btn" disabled>${p.purchasable ? "Купить" : "Нельзя купить"}</button>`) +
+    `</div>`;
+  return `<h3>Планы</h3><p class="st-sub">Лимиты показаны примерно, относительно бесплатного плана. Покупка пока недоступна.</p><div class="plan-grid">${plans.map(card).join("")}</div>`;
+}
+
+// ───────────────────────── «О программе»: подробности ─────────────────────────
+const CHANGELOG = [
+  ["1.0.4.41", "Тестовый режим «Быстрая разработка»: один агент, параллельные чтения, долгие команды в фоне; понятные ошибки сервера вместо «ключ не подошёл»."],
+  ["1.0.4.40", "Патч защиты: усиленная проверка файлов и запуска, проверка запросов до отправки, журнал приложения в жалобах."],
+  ["1.0.4.37", "Перки планов, приоритет в очереди, бета «Быстрая модель» (с платным планом, сама выключается, когда план закончился)."],
+  ["1.0.4.36", "Защита от подмены файлов приложения: изменённое приложение блокируется и просит установить обновление."],
+  ["1.0.4.35", "Подробная страница «О программе»: сведения о системе, данных, аккаунте, история версий."],
+  ["1.0.4.34", "Планы: Alegot, Uranium, Xcode, Max (значения берутся с сервера); страница «Лимиты»; подробная страница «О программе»."],
+  ["1.0.4.32", "Подпись запросов ключом устройства, автобан с апелляцией, обязательные обновления."],
+  ["1.0.4.30", "Плавные анимации, блокировка отправки без сети, плашка про сеть."],
+  ["1.0.4.28", "Уровни мышления: Medium и Extra High — только у подписки ChatGPT; Claude 5.5 — «Стандарт» и «Макс»."],
+  ["1.0.4.25", "Быстрый режим для ChatGPT, генерация картинок с выбором генератора."],
+  ["1.0.4.22", "Бета «Супер-экономия токенов»."],
+  ["1.0.4.20", "Вход через подписку ChatGPT, субагенты, раздел «Документация»."],
+];
+async function fillAbout() {
+  const box = document.querySelector("#settings-page [data-about]");
+  if (!box) return;
+  const [i, upd] = await Promise.all([window.xc.about?.info().catch(() => null), window.xc.update.get().catch(() => null)]);
+  if (!i) return;
+  const acc = app.account;
+  const updText = !upd || ["idle", "none"].includes(upd.state) ? "Установлена последняя версия" : upd.state === "available" ? `Доступна ${upd.name || upd.version}` : upd.state === "downloading" ? `Скачивание ${upd.percent ?? 0}%` : upd.state === "error" ? "Ошибка обновления" : "Обновляется…";
+  const kv = (k, v) => `<div class="ab-row"><span>${esc(k)}</span><b>${esc(String(v))}</b></div>`;
+  const plan = acc?.codePlan?.name || "Бесплатный";
+  box.innerHTML =
+    `<div class="ab-card"><h4>Версия</h4>${kv("Версия", i.version)}${kv("Внутренняя сборка", i.internal)}${kv("Обновления", updText)}${kv("Запущено", i.uptimeMin + " мин назад")}</div>` +
+    `<div class="ab-card"><h4>Аккаунт</h4>${acc?.user ? kv("Вы вошли как", acc.user.name) + kv("План", plan) : kv("Аккаунт", "не выполнен вход")}</div>` +
+    `<div class="ab-card"><h4>Система</h4>${kv("Windows", i.os)}${kv("Архитектура", i.arch)}${kv("Electron", i.electron)}${kv("Chromium", i.chrome)}${kv("Node.js", i.node)}</div>` +
+    `<div class="ab-card"><h4>Данные</h4>${kv("Чатов на этом ПК", i.chats)}<div class="ab-row"><span>Папка данных</span><b style="word-break:break-all;font-weight:500">${esc(i.dataDir)}</b></div><div class="ab-act"><button class="btn" data-open-data>Открыть папку</button><button class="btn" data-copy-diag>Скопировать сведения для жалобы</button></div></div>` +
+    `<div class="ab-card"><h4>Что нового</h4>${CHANGELOG.map(([v, t]) => `<div class="ab-log"><b>${esc(v)}</b><span>${esc(t)}</span></div>`).join("")}</div>`;
+  box.querySelector("[data-open-data]").onclick = () => window.xc.about.openData();
+  box.querySelector("[data-copy-diag]").onclick = async (e) => {
+    const t = `XroMax Code ${i.version} (${i.internal}) · ${i.os} ${i.arch} · Electron ${i.electron} · Chromium ${i.chrome} · план ${plan} · чатов ${i.chats}`;
+    try {
+      await navigator.clipboard.writeText(t);
+      e.currentTarget.textContent = "Скопировано ✓";
+    } catch {
+      e.currentTarget.textContent = "Не вышло скопировать";
+    }
+  };
+}

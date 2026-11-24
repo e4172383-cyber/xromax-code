@@ -97,9 +97,15 @@ const TOOLS = [
         command: { type: "string" },
         cwd: { type: "string", description: "Working folder. Default: workspace root." },
         timeout_sec: { type: "integer", description: "Default 120, max 1800." },
+        background: { type: "boolean", description: "true = start the command and return IMMEDIATELY with a job id (installs, downloads, builds, servers, Tor…). Keep working; check it later with command_status." },
       },
       required: ["command"],
     },
+  },
+  {
+    name: "command_status",
+    description: "Status and recent output of a background command started with run_command background:true. wait_sec (0-120) waits up to that long for it to finish; with 0 it answers immediately. Use action \"stop\" to kill it.",
+    parameters: { type: "object", properties: { id: { type: "integer" }, wait_sec: { type: "integer" }, action: { type: "string", enum: ["status", "stop"] } }, required: ["id"] },
   },
   {
     name: "open_in_editor",
@@ -231,6 +237,42 @@ async function searchText(root, query, regex) {
   return out.length ? out.join("\n") : "No matches.";
 }
 
+// ───── фоновые команды: запустил и сразу пошёл дальше; результат смотрим позже (режим «Быстрая разработка») ─────
+const BG = new Map();
+let bgSeq = 0;
+function startBackground(command, cwd) {
+  const id = ++bgSeq;
+  const child = spawn("powershell.exe", ["-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", "[Console]::OutputEncoding=[Text.Encoding]::UTF8; " + command], { cwd, windowsHide: true, env: process.env });
+  const job = { id, command: command.slice(0, 200), child, out: "", done: false, code: null, startedAt: Date.now() };
+  const add = (b) => {
+    job.out += b.toString("utf8");
+    if (job.out.length > 120_000) job.out = job.out.slice(-80_000); // держим хвост
+  };
+  child.stdout.on("data", add);
+  child.stderr.on("data", add);
+  child.on("error", (e) => ((job.out += `\nFailed to start: ${e.message}`), (job.done = true), (job.code = -1)));
+  child.on("close", (code) => ((job.done = true), (job.code = code)));
+  BG.set(id, job);
+  return job;
+}
+async function backgroundStatus(id, waitSec, action) {
+  const job = BG.get(Number(id));
+  if (!job) return `No background command #${id}. Known: ${[...BG.keys()].join(", ") || "none"}`;
+  if (action === "stop") {
+    if (!job.done) spawn("taskkill", ["/pid", String(job.child.pid), "/T", "/F"], { windowsHide: true });
+    return `Stopped #${id}.`;
+  }
+  const until = Date.now() + Math.min(Math.max(Number(waitSec) || 0, 0), 120) * 1000;
+  while (!job.done && Date.now() < until) await new Promise((r) => setTimeout(r, 400));
+  const secs = Math.round((Date.now() - job.startedAt) / 1000);
+  const state = job.done ? `finished, exit code ${job.code}` : `still running (${secs} s)`;
+  return `#${id} ${state}\ncommand: ${job.command}\n--- last output ---\n${clip(job.out.trim().slice(-3000) || "(no output yet)")}`;
+}
+/** Остановить все фоновые команды (при выходе из приложения) */
+function stopBackground() {
+  for (const j of BG.values()) if (!j.done) try { spawn("taskkill", ["/pid", String(j.child.pid), "/T", "/F"], { windowsHide: true }); } catch {}
+}
+
 function runCommand(command, cwd, timeoutSec, signal) {
   return new Promise((resolve) => {
     const timeout = Math.min(Math.max(Number(timeoutSec) || 120, 1), 1800) * 1000;
@@ -360,10 +402,16 @@ async function runTool(name, args, ctx) {
       case "run_command": {
         const cwd = P(args.cwd);
         if (!fs.existsSync(cwd)) return `Folder not found: ${cwd}`;
+        if (args.background) {
+          const j = startBackground(String(args.command ?? ""), cwd);
+          return `Started in the background as #${j.id}. Continue with other work; check it with command_status when you need the result.`;
+        }
         const r = await runCommand(String(args.command ?? ""), cwd, args.timeout_sec, ctx.signal);
         ctx.onFileChanged?.(cwd);
         return r;
       }
+      case "command_status":
+        return await backgroundStatus(args.id, args.wait_sec, args.action);
       case "open_in_editor": {
         const p = P(args.path);
         ctx.openInEditor?.(p);
@@ -390,7 +438,7 @@ async function runTool(name, args, ctx) {
 // Режимы доступа: "auto" (по умолчанию) — спрашивает только при сильной угрозе, "full" — всё разрешено,
 // "ask" — спрашивает перед любым изменением и командой.
 
-const READ_ONLY = new Set(["list_files", "read_file", "search_text", "open_in_editor", "update_todos", "web_search", "web_fetch"]);
+const READ_ONLY = new Set(["list_files", "read_file", "search_text", "open_in_editor", "update_todos", "web_search", "web_fetch", "command_status"]);
 
 const SYSTEM_DIRS = [
   process.env.SystemRoot || "C:\\Windows",
@@ -459,4 +507,4 @@ function needsApproval(mode, risk) {
   return risk.level === "danger";
 }
 
-module.exports = { TOOLS, runTool, resolvePath, assessRisk, needsApproval, clip, READ_ONLY };
+module.exports = { stopBackground, TOOLS, runTool, resolvePath, assessRisk, needsApproval, clip, READ_ONLY };
