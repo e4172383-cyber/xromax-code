@@ -247,7 +247,7 @@ async function drawSection() {
     const on = list.filter((x) => !x.needsKey || x.hasKey);
     const off = list.filter((x) => x.needsKey && !x.hasKey);
     const prow = (x, connected) =>
-      `<div class="st-row"><div class="t"><b>${esc(x.name)} ${x.custom ? '<span class="badge">свой</span>' : ""} ${!x.needsKey ? '<span class="badge">Встроенный</span>' : connected ? `<span class="badge">${x.oauth ? "Подписка" : "Ключ API"}</span>` : ""}</b><span>${esc(!x.needsKey ? "Бесплатно — по входу через сайт" : connected ? (x.error ? "Ошибка: " + x.error.slice(0, 80) : `Моделей: ${x.count}`) : x.oauth ? "Вход через вашу подписку ChatGPT, без API-ключа" : x.noTools ? "Чат без инструментов" : "Нужен API-ключ")}</span></div><button class="btn" data-prov>${connected ? "Настроить" : "+ Подключить"}</button></div>`;
+      `<div class="st-row"><div class="t"><b>${esc(x.name)} ${x.custom ? '<span class="badge">свой</span>' : ""} ${!x.needsKey ? '<span class="badge">Встроенный</span>' : connected ? `<span class="badge">${x.oauth || x.local ? "Подписка" : "Ключ API"}</span>` : ""}</b><span>${esc(!x.needsKey ? "Бесплатно — по входу через сайт" : connected ? (x.error ? "Ошибка: " + x.error.slice(0, 80) : `Моделей: ${x.count}`) : x.local ? "Подписка Gemini через Antigravity CLI на этом ПК" : x.oauth ? "Вход через вашу подписку ChatGPT, без API-ключа" : x.noTools ? "Чат без инструментов" : "Нужен API-ключ")}</span></div><button class="btn" data-prov>${connected ? "Настроить" : "+ Подключить"}</button></div>`;
     setTimeout(() => {
       const row0 = [...document.querySelectorAll("#settings-page .st-row")].find((r) => r.textContent.includes("ChatGPT (подписка)") && !r.textContent.includes("Нужен") && r.textContent.includes("Подписка"));
       if (!row0 || !window.xc.chatgpt) return;
@@ -306,7 +306,15 @@ async function drawSection() {
       (acc ? `<h3>Аккаунт XroMax</h3><div class="st-card">${row(esc(acc.user?.name || "Аккаунт"), "Ваш план: " + esc((acc.codePlan?.badge ? acc.codePlan.badge + " " : "") + (acc.codePlan?.name || "Бесплатный")) + (acc.codePlan?.until ? " · до " + new Date(acc.codePlan.until).toLocaleDateString("ru-RU") : ""), "")}</div>` + plansHtml(acc) : `<div class="st-card">${row("Вы не вошли", "Войдите через сайт, чтобы видеть лимиты", "")}</div>`) +
       (T ? `<h3>Общий лимит XroMax</h3><p class="st-sub">Helium, Xenon и Claude 5.5 тратят один счётчик. Модели 2.0 (Truo, Lite) — без лимитов.</p><div class="st-card">${bar("5 часов", T.pct5h, T.reset5h)}${bar("Неделя", T.pctWeek, T.resetWeek)}</div>` +
         `<h3>Сбросы лимитов</h3><p class="st-sub">Сбросы — как карточки: копятся и тратятся в любой момент, когда нужно. Сброс недели обнуляет и 5-часовой лимит.</p><div class="st-card">${resetBtn("5h", R.h5, "Сброс 5-часового лимита")}${resetBtn("week", R.week, "Сброс недельного лимита")}</div>` : "") +
-      `<h3>Подписка ChatGPT</h3><div class="st-card" data-gptlim>${row("ChatGPT", "Проверяю…", "")}</div>`;
+      `<h3>Подписка ChatGPT</h3><div class="st-card" data-gptlim>${row("ChatGPT", "Проверяю…", "")}</div>` +
+      `<h3>Gemini (Antigravity)</h3><div class="st-card" data-agylim>${row("Gemini", "Проверяю…", "")}</div>`;
+    setTimeout(async () => {
+      const bx = document.querySelector("#settings-page [data-agylim]");
+      if (!bx || !window.xc.agy) return;
+      const [st, u] = await Promise.all([window.xc.agy.status().catch(() => null), window.xc.agy.usage().catch(() => null)]);
+      if (!st || st.state !== "ready") return (bx.innerHTML = row("Gemini не подключён", "Подключите Antigravity CLI в «Провайдерах»: установить, нажать «Соединить», выбрать тир", '<button class="btn" data-prov>Подключить</button>'), bx.querySelector("[data-prov]").addEventListener("click", () => openSettings()));
+      bx.innerHTML = row("Подключено · моделей: " + st.count, "Использовано через XroMax Code. Свои лимиты Google CLI не показывает", "") + row("За 5 часов", `${u.h5.requests} запросов · ${Math.round(u.h5.tokens / 1000)} тыс. токенов`, "") + row("За неделю", `${u.week.requests} запросов · ${Math.round(u.week.tokens / 1000)} тыс. токенов`, "");
+    }, 40);
     setTimeout(async () => {
       const box = document.querySelector("#settings-page [data-gptlim]");
       if (!box) return;
@@ -674,6 +682,7 @@ function plansHtml(acc) {
 
 // ───────────────────────── «О программе»: подробности ─────────────────────────
 const CHANGELOG = [
+  ["1.0.4.42", "Gemini по вашей подписке через Antigravity CLI: «Соединить», выбор тира, учёт запросов в «Лимитах»."],
   ["1.0.4.41", "Тестовый режим «Быстрая разработка»: один агент, параллельные чтения, долгие команды в фоне; понятные ошибки сервера вместо «ключ не подошёл»."],
   ["1.0.4.40", "Патч защиты: усиленная проверка файлов и запуска, проверка запросов до отправки, журнал приложения в жалобах."],
   ["1.0.4.37", "Перки планов, приоритет в очереди, бета «Быстрая модель» (с платным планом, сама выключается, когда план закончился)."],

@@ -36,6 +36,14 @@ const BUILTIN = [
       { id: "gpt-6-luna", name: "GPT-6 Luna", context: 400_000, vision: true, priceIn: 0, priceOut: 0 },
     ],
   },
+  {
+    id: "antigravity",
+    name: "Gemini (Antigravity)",
+    kind: "agy",
+    local: "agy",
+    reasoning: "none",
+    note: "Ваша подписка Gemini через Antigravity CLI на этом ПК: без ключей, запросы идут напрямую с вашего компьютера",
+  },
   { id: "anthropic", name: "Anthropic", kind: "anthropic", baseUrl: "https://api.anthropic.com", keyUrl: "https://platform.claude.com/settings/keys" },
   { id: "openai", name: "OpenAI", kind: "openai", baseUrl: "https://api.openai.com/v1", reasoning: "effort", keyUrl: "https://platform.openai.com/api-keys" },
   { id: "openrouter", name: "OpenRouter", kind: "openai", baseUrl: "https://openrouter.ai/api/v1", reasoning: "openrouter", keyUrl: "https://openrouter.ai/keys" },
@@ -99,6 +107,12 @@ const NOT_CHAT = /embed|whisper|tts|dall-e|image|moderation|audio|realtime|trans
  * { id, name, context, priceIn, priceOut, free, created }.
  */
 async function discoverModels(provider, key) {
+  // Gemini через локальный Antigravity CLI: список моделей («тиров») даёт `agy models`
+  if (provider.local === "agy") {
+    const st = await require("./agylocal").status(true);
+    if (st.state !== "ready") throw new Error(st.detail || "Antigravity CLI не подключён");
+    return st.models.map((m) => ({ id: m.id, name: m.name, context: 1_000_000, vision: true, free: true, priceIn: 0, priceOut: 0, created: 0 }));
+  }
   // XroMax: каталог бесплатных моделей с сервера (доступность, «Скоро», пометки меняются без обновления приложения);
   // если сервер не ответил — встроенный список
   if (provider.id === "xromax-free") {

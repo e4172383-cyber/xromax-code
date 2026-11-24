@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld("xc", {
   limits: { reset: call("limits:reset") },
   about: { info: call("about:info"), openData: call("about:openData") },
   fast: { set: call("fast:set") },
+  agy: { status: call("agy:status"), login: call("agy:login"), setPath: call("agy:setPath"), usage: call("agy:usage") },
   net: { check: call("net:check"), onState: on("net:state") },
   policy: { get: call("policy:get"), onState: on("policy:state") },
   tamper: { get: call("tamper:get"), onState: on("tamper:state") },

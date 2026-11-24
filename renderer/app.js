@@ -609,7 +609,9 @@ async function openSettings({ focusCustom } = {}) {
       d.className = "prov";
       const status = !p.needsKey ? "Встроено · бесплатно" : p.hasKey ? (p.error ? "Ошибка: " + p.error.slice(0, 80) : `Подключено · ${p.count} моделей`) : p.oauth ? "Не подключено" : "Нет ключа";
       d.innerHTML = `<div class="prov-top"><span class="nm">${esc(p.name)}</span>${p.custom ? `<span class="badge">свой · ${esc(p.baseUrl || "")}</span>` : ""}${p.noTools ? '<span class="badge">без инструментов</span>' : ""}<span class="st ${p.hasKey || !p.needsKey ? "ok" : ""}">${esc(status)}</span></div>`;
-      if (p.oauth) {
+      if (p.local === "agy") {
+        fillAgyBlock(d, p, draw);
+      } else if (p.oauth) {
         d.insertAdjacentHTML("beforeend", `<div class="prov-key">${p.hasKey ? '<button class="btn" data-gptout>Выйти из ChatGPT</button>' : '<button class="btn primary" data-gptin>Войти через ChatGPT</button>'}</div><small>${esc(p.note || "")}</small>`);
         d.querySelector("[data-gptin]")?.addEventListener("click", async (e) => {
           e.currentTarget.textContent = "Открыл браузер — войдите там…";

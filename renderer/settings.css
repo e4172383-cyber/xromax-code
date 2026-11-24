@@ -111,6 +111,14 @@ html:not(.layout-side) #sidebar { position: absolute; z-index: 30; top: 44px; bo
 .plan-card .pc-price small { font-size: 12px; font-weight: 400; color: var(--text-3, #888); }
 .plan-card .pc-lim { font-size: 12.5px; color: var(--text-2, #555); line-height: 1.5; }
 .plan-card .btn { margin-top: auto; font-size: 12px; }
+.agy-box { margin-top: 8px; display: grid; gap: 8px; }
+.agy-st { display: grid; gap: 2px; font-size: 13px; }
+.agy-st.ok b { color: #067647; }
+.agy-st small, .agy-use small { color: var(--text-3, #888); font-size: 11.5px; word-break: break-all; }
+.agy-use { font-size: 12.5px; color: var(--text-2, #555); line-height: 1.5; }
+.agy-steps { margin: 0; padding-left: 18px; font-size: 12.5px; color: var(--text-2, #555); line-height: 1.6; }
+.agy-steps code { background: var(--bg-soft, #eee); padding: 1px 5px; border-radius: 5px; }
+.agy-path summary { cursor: pointer; font-size: 12px; color: var(--text-3, #888); }
 .plan-card .pc-perks { margin: 4px 0 8px; padding-left: 16px; font-size: 12px; color: var(--text-2, #555); line-height: 1.45; display: grid; gap: 3px; }
 
 /* «О программе» */

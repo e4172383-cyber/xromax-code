@@ -50,6 +50,7 @@ const limState = (p) => (p >= 90 ? "full" : p >= 75 ? "warn" : "");
 /** Какие лимиты показывать: тариф сайта (если есть модели «по тарифу») или общие лимиты XroMax 2.5 (5 часов / неделя) */
 function currentLimits() {
   // выбрана модель ChatGPT (подписка) — показываем лимиты подписки, а не XroMax
+  if (cur()?.modelRef?.provider === "antigravity") return null; // у Gemini лимиты XroMax не тратятся; учёт — в «Лимитах»
   if (cur()?.modelRef?.provider === "chatgpt") return app.gptLimits ? { L: app.gptLimits, title: "Лимиты подписки ChatGPT" } : null;
   const anyPlan = app.catalog?.some((g) => g.models?.some((m) => m.plan));
   if (anyPlan && app.account?.limits) return { L: app.account.limits, title: "Лимиты XroMax" };
@@ -159,6 +160,36 @@ function showTampered(t) {
   };
   el.querySelector("[data-site]").onclick = () => window.xc.openExternal("https://xromax-ai.defhosting.com/downloads/code/XroMax-Code-Setup.exe");
 }
+/** Блок подключения Gemini (Antigravity CLI): шаги, «Соединить», проверка, путь и учёт использования */
+async function fillAgyBlock(d, p, redraw) {
+  const box = document.createElement("div");
+  box.className = "agy-box";
+  d.appendChild(box);
+  box.innerHTML = '<small>Проверяю Antigravity CLI…</small>';
+  const [st, u] = await Promise.all([window.xc.agy.status(), window.xc.agy.usage()]);
+  const txt = { missing: "Antigravity CLI не найден на этом компьютере", login: "Установлен, но нужно войти в аккаунт Google", ready: `Подключено · моделей: ${st.count}`, error: "Ошибка: " + (st.detail || "") }[st.state] || st.detail;
+  box.innerHTML =
+    `<div class="agy-st ${st.state === "ready" ? "ok" : ""}"><b>${esc(txt)}</b>${st.path ? `<small>${esc(st.path)}</small>` : ""}</div>` +
+    (st.state === "ready"
+      ? `<div class="agy-use">Использовано через XroMax Code: за 5 часов — ${u.h5.requests} запр. · ${Math.round(u.h5.tokens / 1000)} тыс. токенов; за неделю — ${u.week.requests} запр. · ${Math.round(u.week.tokens / 1000)} тыс. токенов<br><small>Свои лимиты подписки Google CLI не показывает — это счётчик запросов из приложения. Выберите тир (Neon, Carbon, Argon, Hydrogen…) в выборе модели.</small></div>`
+      : `<ol class="agy-steps"><li>Установите Antigravity CLI (или приложение Antigravity) на этот компьютер.</li><li>Нажмите «Соединить» — откроется окно, в нём введите <code>/login</code> и войдите в Google-аккаунт с подпиской.</li><li>Вернитесь сюда и нажмите «Проверить» — модели появятся в выборе модели.</li></ol>`) +
+    `<div class="prov-key">${st.state === "missing" ? '<button class="btn primary" data-agy-dl>Скачать Antigravity</button>' : ""}${st.state !== "ready" ? '<button class="btn primary" data-agy-login>Соединить</button>' : ""}<button class="btn" data-agy-check>Проверить</button></div>` +
+    `<details class="agy-path"><summary>Указать путь к agy вручную</summary><div class="prov-key"><input class="field" placeholder="C:\\Users\\…\\agy.exe" value="${esc((app.prefs && app.prefs.agyPath) || "")}" /><button class="btn" data-agy-path>Сохранить</button></div></details>`;
+  box.querySelector("[data-agy-dl]")?.addEventListener("click", () => window.xc.openExternal(st.download));
+  box.querySelector("[data-agy-login]")?.addEventListener("click", async () => {
+    const r = await window.xc.agy.login();
+    toast(r.ok ? "Открыл окно: введите /login и войдите, затем нажмите «Проверить»" : r.error, 6000);
+  });
+  box.querySelector("[data-agy-check]").addEventListener("click", async (e) => {
+    e.currentTarget.textContent = "Проверяю…";
+    redraw();
+  });
+  box.querySelector("[data-agy-path]")?.addEventListener("click", async () => {
+    await window.xc.agy.setPath(box.querySelector(".agy-path input").value);
+    redraw();
+  });
+}
+window.fillAgyBlock = fillAgyBlock;
 /** Обязательное обновление: версия ниже минимальной — пользоваться нельзя, пока не обновишь */
 function showUpdateRequired(p) {
   let el = document.getElementById("upd-required");

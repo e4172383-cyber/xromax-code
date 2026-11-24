@@ -270,7 +270,7 @@ async function anthropicOnce({ provider, key, model, system, history, tools, thi
 
 /** Один шаг: ответ модели (текст, мышление, вызовы инструментов, расход) */
 async function complete(opts) {
-  const fn = opts.provider.kind === "anthropic" ? anthropicOnce : opts.provider.kind === "chatgpt" ? (o) => require("./chatgpt").chatgptOnce(o, ApiError) : openaiOnce;
+  const fn = opts.provider.kind === "anthropic" ? anthropicOnce : opts.provider.kind === "chatgpt" ? (o) => require("./chatgpt").chatgptOnce(o, ApiError) : opts.provider.kind === "agy" ? (o) => require("./agylocal").agyOnce(o, ApiError) : openaiOnce;
   try {
     return await withRetry(() => fn(opts), opts.signal, opts.onRetry);
   } catch (e) {

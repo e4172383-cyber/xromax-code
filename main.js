@@ -138,7 +138,8 @@ const allProviders = () => [
 const providerById = (id) => allProviders().find((p) => p.id === id);
 // встроенная бесплатная модель XroMax работает по токену аккаунта (вход через сайт)
 const accountToken = () => dec(settings.account?.token);
-const keyFor = (p) => (p.oauth === "chatgpt" ? (chatgpt.isLoggedIn() ? "oauth" : "") : p.id === "xromax-free" ? accountToken() : p.custom ? dec(settings.custom.find((c) => c.id === p.id)?.key) : dec(settings.keys[p.id]));
+let agyReady = false; // подключён ли локальный Antigravity CLI (обновляется проверками)
+const keyFor = (p) => (p.local === "agy" ? (agyReady ? "local" : "") : p.oauth === "chatgpt" ? (chatgpt.isLoggedIn() ? "oauth" : "") : p.id === "xromax-free" ? accountToken() : p.custom ? dec(settings.custom.find((c) => c.id === p.id)?.key) : dec(settings.keys[p.id]));
 const hasAccess = (p) => (p.needsKey === false ? !!accountToken() : !!keyFor(p));
 
 // ───────────────────────── модели ─────────────────────────
@@ -287,6 +288,9 @@ app.whenReady().then(async () => {
   setTimeout(checkIntegrity, 1500);
   setInterval(checkIntegrity, 2 * 60_000); // проверка каждые 2 минуты и перед каждым запросом агента
   setInterval(checkPolicy, 5 * 60_000);
+  agylocal.setPath(settings.prefs.agyPath || "");
+  setTimeout(() => agyCheck(true).catch(() => {}), 3000);
+  setInterval(() => agyCheck(false).catch(() => {}), 120_000);
   chatgpt.init({ file: path.join(DATA(), "chatgpt-auth.json"), enc, dec, openExternal: (u) => shell.openExternal(u) });
   // ключ устройства для подписи запросов к серверу XroMax
   device.init({ get: () => settings.device || null, set: (d) => ((settings.device = d), saveSettings()), enc, dec, origin: account.ORIGIN, token: () => accountToken() });
@@ -375,7 +379,7 @@ ipcMain.handle("models:addCustom", (_e, m) => {
 });
 
 ipcMain.handle("providers:list", () =>
-  allProviders().map((p) => ({ id: p.id, name: p.name, kind: p.kind, baseUrl: p.custom ? settings.custom.find((c) => c.id === p.id)?.baseUrl : p.baseUrl, needsKey: p.needsKey !== false, oauth: p.oauth || null, hasKey: !!keyFor(p), custom: !!p.custom, keyUrl: p.keyUrl, note: p.note, noTools: !!p.noTools, error: modelsCache[p.id]?.error ?? null, count: modelsCache[p.id]?.models?.length ?? (p.fixedModels?.length || 0) }))
+  allProviders().map((p) => ({ id: p.id, name: p.name, kind: p.kind, baseUrl: p.custom ? settings.custom.find((c) => c.id === p.id)?.baseUrl : p.baseUrl, needsKey: p.needsKey !== false, oauth: p.oauth || null, local: p.local || null, hasKey: !!keyFor(p), custom: !!p.custom, keyUrl: p.keyUrl, note: p.note, noTools: !!p.noTools, error: modelsCache[p.id]?.error ?? null, count: modelsCache[p.id]?.models?.length ?? (p.fixedModels?.length || 0) }))
 );
 ipcMain.handle("chatgpt:login", async () => {
   try {
@@ -397,6 +401,33 @@ ipcMain.handle("chatgpt:logout", () => {
   return { ok: true };
 });
 ipcMain.handle("chatgpt:info", () => chatgpt.info());
+// ───── Gemini через локальный Antigravity CLI ─────
+const agylocal = require("./core/agylocal");
+async function agyCheck(force = true) {
+  const st = await agylocal.status(force);
+  agyReady = st.state === "ready";
+  if (agyReady) {
+    const p = providerById("antigravity");
+    modelsCache.antigravity = { at: Date.now(), models: st.models.map((m) => ({ id: m.id, name: m.name, context: 1_000_000, vision: true, free: true, priceIn: 0, priceOut: 0, created: 0 })), error: null };
+    saveModelsCache();
+  } else delete modelsCache.antigravity;
+  send("models:updated");
+  return { state: st.state, detail: st.detail, count: st.models.length, download: agylocal.DOWNLOAD_URL, path: st.exe || null };
+}
+ipcMain.handle("agy:status", () => agyCheck(true));
+ipcMain.handle("agy:login", async () => agylocal.openLogin());
+ipcMain.handle("agy:setPath", (_e, p) => {
+  settings.prefs.agyPath = String(p || "").trim();
+  saveSettings();
+  agylocal.setPath(settings.prefs.agyPath);
+  return agyCheck(true);
+});
+ipcMain.handle("agy:usage", () => {
+  const now = Date.now();
+  const list = (settings.agyUsage || []).filter((r) => now - r.t < 7 * 86400_000);
+  const sum = (arr) => ({ requests: arr.length, tokens: arr.reduce((n, r) => n + r.tokens, 0) });
+  return { h5: sum(list.filter((r) => now - r.t < 5 * 3600_000)), week: sum(list) };
+});
 const pendingImage = new Map();
 ipcMain.handle("image:choose", (_e, { reqId, choice }) => {
   pendingImage.get(reqId)?.(choice || null);
@@ -1159,6 +1190,12 @@ ipcMain.handle("agent:run", async (_e, req) => {
         }),
       ev: (e) => {
         applog.agentEvent(req.id, e);
+        if (e.type === "usage" && p.local === "agy") {
+          // учёт запросов Gemini на этом ПК: за 5 часов и неделю (Google свои лимиты CLI не показывает)
+          (settings.agyUsage ??= []).push({ t: Date.now(), tokens: (e.usage.input ?? 0) + (e.usage.output ?? 0) });
+          settings.agyUsage = settings.agyUsage.filter((r) => Date.now() - r.t < 7 * 86400_000);
+          saveSettings();
+        }
         if (e.type === "usage") {
           const cost = addSpend(s, model, e.usage);
           s.stats.contextTokens = (e.usage.input ?? 0) + (e.usage.cacheRead ?? 0) + (e.usage.cacheWrite ?? 0) + (e.usage.output ?? 0);
