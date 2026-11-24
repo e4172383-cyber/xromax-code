@@ -288,6 +288,7 @@ app.whenReady().then(async () => {
   setTimeout(checkIntegrity, 1500);
   setInterval(checkIntegrity, 2 * 60_000); // проверка каждые 2 минуты и перед каждым запросом агента
   setInterval(checkPolicy, 5 * 60_000);
+  agylocal.setHome(path.join(DATA(), "agy-home")); // чистый профиль для быстрых запусков Antigravity
   agylocal.setPath(settings.prefs.agyPath || "");
   setTimeout(() => agyCheck(true).catch(() => {}), 3000);
   setInterval(() => agyCheck(false).catch(() => {}), 120_000);

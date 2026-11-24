@@ -1,7 +1,7 @@
 {
   "name": "xromax-code",
   "productName": "XroMax Code",
-  "version": "1.0.46",
+  "version": "1.0.47",
   "description": "XroMax Code — AI coding agent for Windows with any API",
   "author": "XROMAX",
   "private": true,
@@ -72,12 +72,12 @@
       }
     ],
     "releaseInfo": {
-      "releaseName": "1.0.4.42"
+      "releaseName": "1.0.4.43"
     },
     "asarUnpack": [
       "core/diag-ts.js"
     ]
   },
-  "displayVersion": "1.0.4.42",
+  "displayVersion": "1.0.4.43",
   "license": "UNLICENSED"
 }

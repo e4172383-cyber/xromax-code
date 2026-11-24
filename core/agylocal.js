@@ -8,7 +8,15 @@ const path = require("path");
 
 const DOWNLOAD_URL = "https://antigravity.google/product/antigravity-cli/";
 let customPath = "";
-let cached = { at: 0, state: "unknown", models: [], detail: "" };
+let cleanHome = ""; // «чистый» профиль для запусков agy: без ваших плагинов и MCP-серверов (они грузятся ~17 секунд на каждый запрос)
+const setHome = (d) => {
+  cleanHome = d;
+  try {
+    fs.mkdirSync(d, { recursive: true });
+  } catch {}
+};
+let cached = { at: 0, state: "unknown", models: [], detail: "", fast: false };
+const envFor = (fast) => (fast && cleanHome ? { ...process.env, USERPROFILE: cleanHome, HOME: cleanHome } : process.env);
 const setPath = (p) => ((customPath = String(p || "").trim()), (cached.at = 0));
 
 // ───── поиск agy на этом ПК ─────
@@ -43,11 +51,32 @@ async function status(force = false) {
   if (!force && Date.now() - cached.at < 20_000) return cached;
   const exe = await findAgy();
   if (!exe) return (cached = { at: Date.now(), state: "missing", models: [], detail: "Antigravity CLI не найден на этом компьютере", exe: null });
-  const r = await new Promise((resolve) => {
+  // сначала пробуем «чистый» профиль (в 4–5 раз быстрее: ответ за ~4 с вместо ~22 с); вход Google берётся из диспетчера учётных данных Windows
+  let fast = !!cleanHome;
+  let r = await runModels(exe, fast);
+  if (fast && !parseModels(r.out).length) {
+    fast = false; // вход не виден из чистого профиля — работаем обычным профилем
+    r = await runModels(exe, false);
+  }
+  const models = parseModels(r.out);
+  if (models.length) return (cached = { at: Date.now(), state: "ready", models, detail: "", exe, fast });
+  const text = (r.out + "\n" + r.err).toLowerCase();
+  if (/login|log in|sign in|auth|credential|unauthor/.test(text)) return (cached = { at: Date.now(), state: "login", models: [], detail: "Нужно войти в аккаунт Google в Antigravity CLI", exe, fast: false });
+  return (cached = { at: Date.now(), state: "error", models: [], detail: String(r.err || r.out).trim().slice(0, 200) || "agy models не вернул моделей", exe, fast: false });
+}
+function parseModels(out) {
+  return String(out)
+    .split(/\r?\n/)
+    .map((l) => l.split("\t"))
+    .filter((p) => p.length >= 2 && /^[a-z0-9][a-z0-9._-]+$/i.test(p[0].trim()))
+    .map(([id, name]) => ({ id: id.trim(), name: name.trim() }));
+}
+function runModels(exe, fast) {
+  return new Promise((resolve) => {
     let out = "";
     let err = "";
     let done = false;
-    const c = spawnAgy(exe, ["models"]);
+    const c = spawnAgy(exe, ["models"], { env: envFor(fast) });
     const t = setTimeout(() => {
       if (!done) (done = true), c.kill(), resolve({ out, err: err + "timeout" });
     }, 40_000);
@@ -56,15 +85,6 @@ async function status(force = false) {
     c.on("error", (e) => !done && ((done = true), clearTimeout(t), resolve({ out, err: String(e.message) })));
     c.on("close", () => !done && ((done = true), clearTimeout(t), resolve({ out, err })));
   });
-  const models = String(r.out)
-    .split(/\r?\n/)
-    .map((l) => l.split("\t"))
-    .filter((p) => p.length >= 2 && /^[a-z0-9][a-z0-9._-]+$/i.test(p[0].trim()))
-    .map(([id, name]) => ({ id: id.trim(), name: name.trim() }));
-  if (models.length) return (cached = { at: Date.now(), state: "ready", models, detail: "", exe });
-  const text = (r.out + "\n" + r.err).toLowerCase();
-  if (/login|log in|sign in|auth|credential|unauthor/.test(text)) return (cached = { at: Date.now(), state: "login", models: [], detail: "Нужно войти в аккаунт Google в Antigravity CLI", exe });
-  return (cached = { at: Date.now(), state: "error", models: [], detail: String(r.err || r.out).trim().slice(0, 200) || "agy models не вернул моделей", exe });
 }
 
 /** Открыть окно PowerShell с agy: там вводим /login и входим в Google */
@@ -78,10 +98,18 @@ async function openLogin() {
 
 // ───── запрос к модели ─────
 const textOf = (c) => (Array.isArray(c) ? c.filter((p) => p.type === "text").map((p) => p.text).join("\n") : String(c ?? ""));
+// компактная схема параметров: без описаний полей — модели хватает имён и типов, а запрос короче и быстрее
+const compact = (p) => {
+  if (!p || typeof p !== "object") return p;
+  if (Array.isArray(p)) return p.map(compact);
+  const o = {};
+  for (const [k, v] of Object.entries(p)) if (k !== "description") o[k] = compact(v);
+  return o;
+};
 function toolsSection(tools) {
   const list = tools
     .filter((t) => t.name)
-    .map((t) => `- ${t.name}: ${String(t.description || "").replace(/\s+/g, " ").slice(0, 400)}\n  parameters: ${JSON.stringify(t.parameters ?? {})}`)
+    .map((t) => `- ${t.name}: ${String(t.description || "").replace(/\s+/g, " ").slice(0, 200)}\n  parameters: ${JSON.stringify(compact(t.parameters ?? {}))}`)
     .join("\n");
   return (
     "\n\n# Tools of the user's computer (through XroMax Code)\n" +
@@ -136,9 +164,10 @@ const TOTAL_MS = 1_200_000;
 async function agyOnce({ model, system, history, tools, signal, onText, onThinking }, ApiError) {
   const st = await status();
   if (st.state !== "ready") throw new ApiError(st.state === "login" ? 401 : 503, st.state === "missing" ? "Antigravity CLI не установлен — подключите Gemini в «Провайдерах»." : st.state === "login" ? "Antigravity CLI: нужно войти — «Провайдеры» → Gemini → «Соединить»." : "Antigravity CLI: " + st.detail);
-  const prompt = buildPrompt(system, history, tools || []);
+  // история ужимается (старые длинные результаты инструментов сокращаются) — меньше токенов, быстрее ответ
+  const prompt = buildPrompt(system, require("./saver").shrinkHistory(history), tools || []);
   const args = ["--output-format=stream-json", "--disable-slash-commands", `--model=${model}`];
-  const child = spawnAgy(st.exe, args);
+  const child = spawnAgy(st.exe, args, { env: envFor(st.fast) });
   return await new Promise((resolve, reject) => {
     let buf = "";
     let full = "";
@@ -232,4 +261,4 @@ async function agyOnce({ model, system, history, tools, signal, onText, onThinki
   });
 }
 
-module.exports = { DOWNLOAD_URL, setPath, findAgy, status, openLogin, agyOnce, buildPrompt, parseToolCalls };
+module.exports = { DOWNLOAD_URL, setHome, setPath, findAgy, status, openLogin, agyOnce, buildPrompt, parseToolCalls };
