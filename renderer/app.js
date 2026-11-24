@@ -215,6 +215,7 @@ function mountComposer() {
       }))
     );
   $("#ultra-chip").onclick = toggleUltra;
+  $("#daily-chip").onclick = () => setSess({ daily: !cur().daily });
   $("#project-chip").onclick = (e) => projectMenu(e.currentTarget);
 }
 function autoGrow() {
@@ -286,6 +287,7 @@ function refreshChips() {
   $("#access-chip").classList.toggle("on", s.access === "full");
   $("#access-chip").classList.toggle("plan", s.access === "plan");
   $("#ultra-chip").classList.toggle("on", !!s.ultra);
+  $("#daily-chip").classList.toggle("on", !!s.daily);
   $("#composer").classList.toggle("ultra", !!s.ultra);
   $("#ultra-warn").classList.toggle("hidden", !s.ultra);
   ultraBackground(!!s.ultra);
@@ -717,7 +719,7 @@ function saveSession(s) {
   if (!s.items.length) return;
   // сами картинки (base64) в сохранённый чат не кладём — только путь к файлу
   const slim = JSON.parse(JSON.stringify(s.items, (k, v) => (k === "src" && typeof v === "string" && v.startsWith("data:") ? undefined : v)));
-  window.xc.sessions.save({ id: s.id, title: s.title, workspace: s.workspace, modelRef: s.modelRef, thinking: s.thinking, access: s.access, ultra: s.ultra, items: slim });
+  window.xc.sessions.save({ id: s.id, title: s.title, workspace: s.workspace, modelRef: s.modelRef, thinking: s.thinking, access: s.access, ultra: s.ultra, daily: s.daily, items: slim });
   // макет «Сессии сбоку»: список слева всегда свежий
   if (document.documentElement.classList.contains("layout-side")) {
     clearTimeout(saveSession.t);
@@ -1020,7 +1022,7 @@ async function submit(queued) {
   renderTranscript();
   refreshChips();
   saveSession(s);
-  const r = await window.xc.agent.run({ id: s.id, text, modelRef: s.modelRef, fast: !!s.fast, thinking: s.thinking, access: s.access, ultra: s.ultra, workspace: s.workspace, attachments: atts.map((a) => ({ kind: a.kind, name: a.name, text: a.text, dataUrl: a.dataUrl })) });
+  const r = await window.xc.agent.run({ id: s.id, text, modelRef: s.modelRef, fast: !!s.fast, thinking: s.thinking, access: s.access, ultra: s.ultra, daily: s.daily, workspace: s.workspace, attachments: atts.map((a) => ({ kind: a.kind, name: a.name, text: a.text, dataUrl: a.dataUrl })) });
   if (r && r.ok === false) onAgentEvent({ sessionId: s.id, type: "finished", ok: false, error: r.error });
 }
 function stop() {
@@ -1048,7 +1050,7 @@ async function retryLast() {
   renderTabs();
   renderTranscript();
   refreshChips();
-  const r = await window.xc.agent.run({ id: s.id, text: "", resume: true, modelRef: s.modelRef, fast: !!s.fast, thinking: s.thinking, access: s.access, ultra: s.ultra, workspace: s.workspace, attachments: [] });
+  const r = await window.xc.agent.run({ id: s.id, text: "", resume: true, modelRef: s.modelRef, fast: !!s.fast, thinking: s.thinking, access: s.access, ultra: s.ultra, daily: s.daily, workspace: s.workspace, attachments: [] });
   if (r && r.ok === false) onAgentEvent({ sessionId: s.id, type: "finished", ok: false, error: r.error });
 }
 function renderRetryBar() {
@@ -1288,14 +1290,14 @@ function renderApproval() {
   const a = s?.approvals?.[0];
   if (!a) return;
   const what =
-    a.tool === "run_command" ? `Выполнить команду` : a.tool === "delete_path" ? `Удалить` : a.tool === "move_path" ? "Переместить" : a.tool === "write_file" ? "Записать файл" : a.tool === "edit_file" ? "Изменить файл" : TOOL_VERB[a.tool] || a.tool;
-  const detail = a.tool === "run_command" ? a.args.command : a.tool === "move_path" ? `${a.args.from} → ${a.args.to}` : a.args.path || JSON.stringify(a.args);
+    a.tool === "run_command" ? `Выполнить команду` : a.tool === "delete_path" ? `Удалить` : a.tool === "move_path" ? "Переместить" : a.tool === "write_file" ? "Записать файл" : a.tool === "edit_file" ? "Изменить файл" : a.tool === "book_or_pickup" ? (a.args.kind === "reserve" ? "Забронировать товар" : "Оформить самовывоз") : TOOL_VERB[a.tool] || a.tool;
+  const detail = a.tool === "book_or_pickup" ? `${a.args.item} — ${a.args.place}${a.args.when ? `, ${a.args.when}` : ""}\nПриложение само ничего не оплачивает: покажет контакты магазина, текст сообщения и маршрут.` : a.tool === "run_command" ? a.args.command : a.tool === "move_path" ? `${a.args.from} → ${a.args.to}` : a.args.path || JSON.stringify(a.args);
   const el = document.createElement("div");
   el.id = "approval";
   if (a.level === "danger") el.className = "danger";
   el.innerHTML = `<div class="a-top"><div class="a-ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/><path d="M12 8v5M12 16h.01"/></svg></div>
     <div style="min-width:0;flex:1"><div class="a-title">${a.agent ? `Агент «${esc(a.agent)}» хочет: ` : "Агент хочет: "}${esc(what)}</div><div class="a-why">${a.level === "danger" ? "Опасное действие: " + esc(a.reason) : "Нужно ваше разрешение"}</div><pre>${esc(detail || "")}</pre></div></div>
-    <div class="a-btns"><button class="btn" data-d="deny">Отклонить</button><button class="btn" data-d="allow_session">Разрешать в этой сессии</button><button class="btn ${a.level === "danger" ? "red" : "primary"}" data-d="allow">Разрешить</button></div>`;
+    <div class="a-btns"><button class="btn" data-d="deny">Отклонить</button>${a.tool === "book_or_pickup" ? "" : `<button class="btn" data-d="allow_session">Разрешать в этой сессии</button>`}<button class="btn ${a.level === "danger" ? "red" : "primary"}" data-d="allow">Разрешить</button></div>`;
   el.querySelectorAll("[data-d]").forEach((b) => {
     b.onclick = () => {
       window.xc.agent.approve({ reqId: a.reqId, decision: b.dataset.d });

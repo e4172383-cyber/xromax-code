@@ -1,14 +1,14 @@
 {
   "name": "xromax-code",
   "productName": "XroMax Code",
-  "version": "1.0.47",
+  "version": "1.1.1",
   "description": "XroMax Code — AI coding agent for Windows with any API",
   "author": "XROMAX",
   "private": true,
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "test": "node test/tools.test.js && node test/agent.test.js && node test/fastdev.test.js",
+    "test": "node test/tools.test.js && node test/agent.test.js && node test/fastdev.test.js && node test/daily.test.js",
     "pack": "electron-builder --win dir",
     "dist": "node scripts/make-integrity.js && electron-builder --win nsis && node scripts/sign-update.js"
   },
@@ -72,12 +72,12 @@
       }
     ],
     "releaseInfo": {
-      "releaseName": "1.0.4.43"
+      "releaseName": "1.0.5.1"
     },
     "asarUnpack": [
       "core/diag-ts.js"
     ]
   },
-  "displayVersion": "1.0.4.43",
+  "displayVersion": "1.0.5.1",
   "license": "UNLICENSED"
 }

@@ -12,6 +12,7 @@ const account = require("./core/account");
 const importers = require("./core/importers");
 const chatgpt = require("./core/chatgpt");
 const device = require("./core/device");
+const daily = require("./core/daily");
 const integrity = require("./core/integrity");
 const applog = require("./core/applog");
 const { stopBackground } = require("./core/tools");
@@ -497,6 +498,30 @@ ipcMain.handle("projects:pick", async () => {
   return dir;
 });
 ipcMain.handle("projects:open", (_e, dir) => shell.openPath(dir));
+ipcMain.handle("win:action", (_e, name) => {
+  if (!win || win.isDestroyed()) return;
+  const wc = win.webContents;
+  const zoom = (d) => wc.setZoomFactor(Math.min(2, Math.max(0.6, d === 0 ? 1 : wc.getZoomFactor() + d)));
+  const acts = {
+    minimize: () => win.minimize(),
+    maximize: () => (win.isMaximized() ? win.unmaximize() : win.maximize()),
+    close: () => win.close(),
+    reload: () => wc.reload(),
+    devtools: () => !app.isPackaged && wc.toggleDevTools(),
+    fullscreen: () => win.setFullScreen(!win.isFullScreen()),
+    zoomIn: () => zoom(0.1),
+    zoomOut: () => zoom(-0.1),
+    zoomReset: () => zoom(0),
+    undo: () => wc.undo(),
+    redo: () => wc.redo(),
+    cut: () => wc.cut(),
+    copy: () => wc.copy(),
+    paste: () => wc.paste(),
+    delete: () => wc.delete(),
+    selectAll: () => wc.selectAll(),
+  };
+  acts[name]?.();
+});
 ipcMain.handle("open:external", (_e, url) => /^https?:\/\//.test(url) && shell.openExternal(url));
 
 ipcMain.handle("sessions:list", async () => {
@@ -1179,6 +1204,51 @@ ipcMain.handle("agent:run", async (_e, req) => {
         }
       },
       onCreateAgent: p.noTools ? null : saveCustomAgent,
+      daily: !!req.daily && !p.noTools,
+      onDaily: p.noTools ? null : async (name, a) => {
+        // согласие на геолокацию спрашиваем один раз (можно отозвать в Настройки → Конфиденциальность)
+        const consent = async () => {
+          if (settings.prefs.dailyGeo === true) return true;
+          if (settings.prefs.dailyGeo === false) return false;
+          const r = await dialog.showMessageBox(win, {
+            type: "question",
+            buttons: [T("Разрешить"), T("Не сейчас")],
+            defaultId: 0,
+            cancelId: 1,
+            title: "XroMax Code",
+            message: T("Разрешить повседневному режиму узнавать, где вы находитесь?"),
+            detail: T("Местоположение берётся средствами Windows и остаётся на этом ПК. Модели уходит только район и расстояния (координаты округляются до ~1 км). Поиск мест идёт через OpenStreetMap. Отозвать можно в настройках."),
+          });
+          settings.prefs.dailyGeo = r.response === 0;
+          saveSettings();
+          return settings.prefs.dailyGeo;
+        };
+        if (name === "get_location") return daily.getLocationTool(consent);
+        if (name === "find_places") return daily.findPlacesTool(a, consent);
+        // book_or_pickup: всегда подтверждение пользователем; приложение само ничего не заказывает и не оплачивает
+        const answer = await new Promise((resolve) => {
+          const reqId = `${req.id}:${++reqSeq}`;
+          pendingApprovals.set(reqId, resolve);
+          ev({
+            type: "approval",
+            reqId,
+            tool: "book_or_pickup",
+            args: { place: String(a.place || "").slice(0, 120), item: String(a.item || "").slice(0, 200), kind: a.kind === "reserve" ? "reserve" : "pickup", when: String(a.when || "").slice(0, 60) },
+            reason: a.kind === "reserve" ? T("Бронь товара в магазине") : T("Самовывоз товара из магазина"),
+            level: "normal",
+            agent: null,
+          });
+          ctrl.signal.addEventListener("abort", () => resolve("deny"), { once: true });
+        });
+        if (answer !== "allow" && answer !== "allow_session") return "The user declined. Don't retry; offer another place or option.";
+        const lat = Number(a.lat);
+        const lon = Number(a.lon);
+        const route = Number.isFinite(lat) && Number.isFinite(lon) ? daily.routeUrl(lat, lon) : "";
+        if (route) shell.openExternal(route);
+        const site = /^https?:\/\//.test(String(a.site || "")) ? a.site : "";
+        const msg = `Здравствуйте! Хочу ${a.kind === "reserve" ? "забронировать" : "забрать"}: ${String(a.item || "").slice(0, 200)}${a.when ? `, к ${String(a.when).slice(0, 60)}` : ""}. Есть ли в наличии и какая цена?`;
+        return `Confirmed by the user. The app can't place the order itself, so the user finishes it: ${a.phone ? `call ${a.phone}` : "call or visit the store"}${site ? ` or use ${site}` : ""}. Prepared message to read or send: "${msg}"${route ? " A walking route was opened in the browser." : ""} Tell the user these next steps briefly.`;
+      },
       signal: ctrl.signal,
       ctx: { trash: (pth) => shell.trashItem(pth) },
       approve: (r) =>

@@ -24,6 +24,7 @@ contextBridge.exposeInMainWorld("xc", {
   projects: { pick: call("projects:pick"), open: call("projects:open") },
   sessions: { list: call("sessions:list"), get: call("sessions:get"), save: call("sessions:save"), remove: call("sessions:delete") },
   agent: { run: call("agent:run"), stop: call("agent:stop"), approve: call("agent:approve"), compress: call("agent:compress"), onEvent: on("agent:event") },
+  win: { action: call("win:action") },
   openExternal: call("open:external"),
   auth: { get: call("auth:get"), refresh: call("auth:refresh"), start: call("auth:start"), open: call("auth:open"), cancel: call("auth:cancel"), logout: call("auth:logout"), onChanged: on("auth:changed") },
   backup: { list: call("backup:list"), restore: call("backup:restore") },

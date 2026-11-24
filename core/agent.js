@@ -68,6 +68,42 @@ const GENERATE_IMAGE_TOOL = {
   parameters: { type: "object", properties: { prompt: { type: "string", description: "Detailed description of the image." } }, required: ["prompt"] },
 };
 
+/** «Повседневный режим»: поиск товаров/мест рядом по геолокации, самовывоз и бронь (только с подтверждением) */
+const DAILY_TOOLS = [
+  {
+    name: "get_location",
+    description: "Get the user's approximate location (city/district, rounded to ~1 km) from the device. The app asks the user for permission the first time.",
+    parameters: { type: "object", properties: {} },
+  },
+  {
+    name: "find_places",
+    description: "Find stores, pharmacies, cafes, services near the user (OpenStreetMap), sorted by distance, with hours/phone/site when known. Search by category or brand in the user's language. It does NOT know stock or prices: say so and suggest checking with the store.",
+    parameters: { type: "object", properties: { query: { type: "string", description: "Category or brand, e.g. \"аптека\", \"электроника\", \"Фора\"." }, radius_m: { type: "number", description: "Search radius in meters (300-20000, default 3000)." } }, required: ["query"] },
+  },
+  {
+    name: "book_or_pickup",
+    description: "Offer the user to pick an item up or reserve it at a chosen place. The app shows a confirmation card; only after the user confirms does it return the store's contact, a prepared message and a route link. The app cannot pay or place the order itself — the user finishes it by phone, on the site or in the store.",
+    parameters: {
+      type: "object",
+      properties: {
+        place: { type: "string" },
+        item: { type: "string", description: "What to pick up or reserve." },
+        kind: { type: "string", enum: ["pickup", "reserve"] },
+        when: { type: "string", description: "Desired time, if any." },
+        phone: { type: "string" },
+        site: { type: "string" },
+        lat: { type: "number" },
+        lon: { type: "number" },
+      },
+      required: ["place", "item", "kind"],
+    },
+  },
+];
+const DAILY_TEXT =
+  "EVERYDAY MODE is ON: you are also a helpful everyday assistant. When the user wants to buy, find or get something nearby (a product, medicine, food, a service), use get_location/find_places to find real places close to them, " +
+  "compare 2-4 options by distance and hours, and be honest that stock and prices are unknown unless a site says so. Then offer to pick it up or reserve it with book_or_pickup (the user always confirms; you cannot pay or order yourself). " +
+  "Never reveal precise coordinates in the chat; speak about the district and distance. If location is unavailable, ask for the city/area instead.";
+
 /** Тестовый режим «Быстрая разработка»: один агент без субагентов, минимум текста, параллельные вызовы, длинное — в фоне */
 const FAST_DEV_TEXT =
   "FAST DEVELOPMENT MODE (test). You work ALONE as one agent: no sub-agents. Be extremely fast and terse: no plans, no explanations, no recaps — just act. " +
@@ -195,10 +231,12 @@ async function runAgent(opts) {
     ...(opts.ultra && !role ? [subTool] : []),
     ...(!role && opts.onCreateAgent ? [CREATE_AGENT_TOOL] : []),
     ...(!role && opts.onImage ? [GENERATE_IMAGE_TOOL] : []),
+    ...(!role && opts.daily && opts.onDaily ? DAILY_TOOLS : []),
     ...(!role && customAgents.length && !(opts.fastDev && !opts.ultra) ? [RUN_AGENT_TOOL] : []), // в «Быстрой разработке» без UltraCode субагентов нет
   ].filter((t) => !planMode || PLAN_TOOLS.has(t.name)); // в режиме плана — только чтение и поиск
   let system = systemPrompt(opts);
   if (opts.fastDev && !role) system += "\n\n" + FAST_DEV_TEXT;
+  if (opts.daily && opts.onDaily && !role) system += "\n\n" + DAILY_TEXT;
   if (skillList.length) {
     system +=
       "\n\nSkills (ready instructions for specific tasks). When a task matches a skill, call use_skill with its name first and follow it:\n" +
@@ -308,6 +346,12 @@ async function runAgent(opts) {
           result = await opts.onImage({ prompt: String(args.prompt || "") });
         } catch (e) {
           result = `Image generation failed: ${String(e.message || e).slice(0, 200)}`;
+        }
+      } else if ((c.name === "get_location" || c.name === "find_places" || c.name === "book_or_pickup") && !role && opts.daily && opts.onDaily) {
+        try {
+          result = await opts.onDaily(c.name, args);
+        } catch (e) {
+          result = `Everyday-mode tool failed: ${String(e.message || e).slice(0, 200)}`;
         }
       } else if (c.name === "create_subagent" && !role && opts.onCreateAgent) {
         try {

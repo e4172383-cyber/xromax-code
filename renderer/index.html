@@ -10,7 +10,7 @@
   </head>
   <body>
     <div id="titlebar">
-      <button class="icon-btn" id="side-toggle" title="Все сессии"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16" /></svg></button>
+      <button class="icon-btn" id="side-toggle" title="Меню"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16" /></svg></button>
       <button class="icon-btn" id="settings-btn" title="Поставщики и ключи"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0" /><circle cx="16" cy="6" r="2" /><circle cx="10" cy="12" r="2" /><circle cx="18" cy="18" r="2" /></svg></button>
       <div id="tabs"></div>
       <button class="icon-btn" id="new-tab" title="Новая сессия (Ctrl+T)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14" /></svg></button>
@@ -76,6 +76,7 @@
           <button class="chip" id="think-chip" title="Глубина мышления"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z" /></svg><span class="lbl">Default</span><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m6 9 6 6 6-6" /></svg></button>
           <button class="chip" id="access-chip" title="Доступ"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z" /></svg><span class="lbl">Авто</span><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m6 9 6 6 6-6" /></svg></button>
           <button class="chip" id="ultra-chip" title="UltraCode — усиление от XroMax: субагенты, критики, тесты"><svg class="spark" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8z" /></svg>UltraCode</button>
+          <button class="chip" id="daily-chip" title="Повседневный режим: найти товар или место рядом по геолокации, самовывоз и бронь (всегда с вашего подтверждения)">🛒 Рядом</button>
           <button id="send" disabled title="Отправить (Enter)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7" /></svg></button>
         </div>
       </div>
@@ -90,5 +91,6 @@
     <script src="app.js"></script>
     <script src="extras.js"></script>
     <script src="settings.js"></script>
+    <script src="appmenu.js"></script>
   </body>
 </html>
