@@ -124,6 +124,9 @@ const ACCESS_TEXT = {
     "PLAN MODE: you may only read and research (list_files, read_file, search_text, web_search, web_fetch). You can't change files or run commands. Study the code and the task, then answer with a clear step-by-step plan in Markdown: goal, the files to create or change and what exactly to do in each, risks, and how to verify it. Ask only if something important is truly unclear. The user will press «Выполнить план» to let you do it.",
 };
 /** «Создал / записал / исправил…» — утверждение, что действие выполнено */
+/** Модель утверждает, что у неё нет инструментов/доступа к файлам, хотя инструменты есть («у меня нет инструментов для записи файлов», «откройте новый чат») */
+const NOTOOLS_RE =
+  /(?:нет\s+(?:у\s+меня\s+)?(?:инструмент|доступа\s+к\s+(?:файл|вашему|диску|компьютер))|не\s+(?:вижу|имею\s+доступа)[^.\n]{0,40}(?:диск|компьютер|ваши\s+файл|вашу\s+папк)|открой(?:те)?\s+нов[а-я]+\s+чат|закро(?:й|йте)\s+этот\s+чат|\bI\s+(?:don't|do not)\s+have\s+(?:access|tools)|\bno\s+(?:file|tool)\s+access\b|\bcan(?:'|no)t\s+(?:access|write)\s+(?:your\s+)?(?:files|disk|computer))/i;
 const CLAIM_RE =
   /(?:^|[^а-яё])(?:создал|записал|изменил|обновил|удалил|добавил|сохранил|исправил|запустил|установил|переименовал|переместил|отредактировал|написал файл|сделал файл)[аи]?(?![а-яё])|\bI(?:'ve| have)? (?:created|written|wrote|updated|modified|deleted|added|saved|fixed|installed|ran|edited|renamed)\b|\b(?:file|files) (?:has|have) been (?:created|updated|saved|written)\b/i;
 
@@ -248,6 +251,7 @@ async function runAgent(opts) {
   // шагов с запасом: большие задачи (сайты, рефакторинг) не должны обрываться на «80 шагов»
   const maxSteps = opts.maxSteps ?? (role ? 150 : 1000);
   let continues = 0;
+  let noToolsNudged = false;
   const allowedInSession = opts.allowedInSession ?? new Set();
 
   let toolsUsed = 0;
@@ -290,6 +294,18 @@ async function runAgent(opts) {
         history.push({ role: "assistant", content: r.content || "", ...r.assistantExtra });
         history.push({ role: "user", content: "Continue exactly from where you stopped. Don't repeat what you already wrote." });
         ev({ type: "notice", text: "Ответ оборвался по длине — продолжаю автоматически…" });
+        continue;
+      }
+      // «У меня нет инструментов», хотя они есть: один раз напоминаем и просим вызвать инструмент
+      if (!planMode && !toolsUsed && !noToolsNudged && tools.length && NOTOOLS_RE.test(r.content || "")) {
+        noToolsNudged = true;
+        history.push({ role: "assistant", content: r.content || "" });
+        history.push({
+          role: "user",
+          content:
+            "[XroMax Code check] That is wrong: you DO have tools right now (list_files, read_file, write_file, edit_file, run_command and others) and they run on the user's PC in the workspace folder. Never ask the user to open a new chat or restart. Call the tools now and do the task.",
+        });
+        ev({ type: "notice", text: "Модель ошиблась, что у неё нет инструментов, — напоминаю и продолжаю…" });
         continue;
       }
       // «Сделал», но ни одного инструмента за весь ответ не вызвал — один раз просим сделать по-настоящему
@@ -506,4 +522,4 @@ async function compressHistory({ provider, key, model, history, signal }) {
   };
 }
 
-module.exports = { CREATE_AGENT_TOOL, RUN_AGENT_TOOL, runAgent, compressHistory, systemPrompt, MAX_PARALLEL, SUBAGENTS_TOOL, subagentsTool, agentCap, agentLimit, textToolCalls, CLAIM_RE };
+module.exports = { CREATE_AGENT_TOOL, RUN_AGENT_TOOL, runAgent, compressHistory, systemPrompt, MAX_PARALLEL, SUBAGENTS_TOOL, subagentsTool, agentCap, agentLimit, textToolCalls, CLAIM_RE, NOTOOLS_RE };
